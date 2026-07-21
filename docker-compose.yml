@@ -1,0 +1,54 @@
+services:
+  tsx-evaluator:
+    build: .
+    environment:
+      GRPC_PORT: "50052"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: tsx_evaluator
+      DB_SSLMODE: disable
+      TRACKER_ADDR: "tsx-tracker:50051"
+      EVAL_INTERVAL: "5m"
+      EVAL_BATCH_SIZE: "1"
+    ports:
+      - "50052:50052"
+    depends_on:
+      - tsx-tracker
+
+  tsx-tracker:
+    image: localhost/tsx-tracker:latest
+    environment:
+      GRPC_PORT: "50051"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: tsx_tracker
+      DB_SSLMODE: disable
+      FMP_API_KEY: ${FMP_API_KEY}
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tsx_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
