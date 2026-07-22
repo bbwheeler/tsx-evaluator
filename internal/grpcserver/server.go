@@ -10,6 +10,7 @@ import (
 
 	"github.com/example/tsx-evaluator/internal/analyzer"
 	"github.com/example/tsx-evaluator/internal/db"
+	"github.com/example/tsx-evaluator/internal/finance"
 
 	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
 )
@@ -26,12 +27,13 @@ type Store interface {
 
 type Server struct {
 	tsxv1.UnimplementedEvaluatorServiceServer
-	repo Store
-	log  *slog.Logger
+	repo   Store
+	finCli *finance.Client
+	log    *slog.Logger
 }
 
-func New(repo Store, log *slog.Logger) *Server {
-	return &Server{repo: repo, log: log}
+func New(repo Store, finCli *finance.Client, log *slog.Logger) *Server {
+	return &Server{repo: repo, finCli: finCli, log: log}
 }
 
 func (s *Server) GetScores(ctx context.Context, req *tsxv1.GetScoresRequest) (*tsxv1.GetScoresResponse, error) {
@@ -107,10 +109,7 @@ func (s *Server) ListScoredStocks(ctx context.Context, req *tsxv1.ListScoredStoc
 }
 
 func (s *Server) EvaluateNow(ctx context.Context, req *tsxv1.EvaluateNowRequest) (*tsxv1.EvaluateNowResponse, error) {
-	// Trigger an immediate evaluation on a random symbol.
-	// In a production system this would accept a symbol parameter;
-	// here we just re-evaluate any existing symbol or generate a dummy one.
-	scores := analyzer.Analyze("DUMMY")
+	scores := analyzer.Analyze(ctx, s.finCli, "DUMMY", s.log)
 	if err := s.repo.UpsertScores(ctx, scores); err != nil {
 		s.log.Error("EvaluateNow upsert failed", "error", err)
 		return nil, status.Error(codes.Internal, "internal error")

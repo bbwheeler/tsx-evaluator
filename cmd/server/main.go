@@ -15,6 +15,7 @@ import (
 	"github.com/example/tsx-evaluator/internal/config"
 	"github.com/example/tsx-evaluator/internal/db"
 	"github.com/example/tsx-evaluator/internal/evaluator"
+	"github.com/example/tsx-evaluator/internal/finance"
 	"github.com/example/tsx-evaluator/internal/grpcserver"
 
 	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
@@ -49,8 +50,11 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("database ready")
 
+	// Financial data client
+	finCli := finance.NewClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
+
 	// Background evaluator loop
-	eval := evaluator.New(cfg, repo, log)
+	eval := evaluator.New(cfg, repo, finCli, log)
 	go eval.Run(ctx)
 
 	// gRPC server
@@ -60,7 +64,7 @@ func run(log *slog.Logger) error {
 	}
 
 	grpcSrv := grpc.NewServer()
-	tsxv1.RegisterEvaluatorServiceServer(grpcSrv, grpcserver.New(repo, log))
+	tsxv1.RegisterEvaluatorServiceServer(grpcSrv, grpcserver.New(repo, finCli, log))
 	reflection.Register(grpcSrv)
 
 	go func() {

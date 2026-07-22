@@ -19,6 +19,9 @@ type Config struct {
 	TrackerAddr    string
 	EvalInterval   time.Duration
 	EvalBatchSize  int
+
+	FMPAPIKey  string
+	FMPBaseURL string
 }
 
 func Load() (*Config, error) {
@@ -33,6 +36,8 @@ func Load() (*Config, error) {
 		TrackerAddr:   getEnv("TRACKER_ADDR", "localhost:50051"),
 		EvalInterval:  getEnvDuration("EVAL_INTERVAL", 5*time.Minute),
 		EvalBatchSize: getEnvInt("EVAL_BATCH_SIZE", 1),
+		FMPAPIKey:     getEnv("FMP_API_KEY", ""),
+		FMPBaseURL:    getEnv("FMP_BASE_URL", "https://financialmodelingprep.com"),
 	}
 
 	if cfg.EvalInterval < time.Second {

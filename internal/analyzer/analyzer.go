@@ -1,33 +1,25 @@
 package analyzer
 
 import (
-	"hash/fnv"
-	"math"
+	"context"
+	"log/slog"
 
 	"github.com/example/tsx-evaluator/internal/db"
+	"github.com/example/tsx-evaluator/internal/finance"
 )
 
-// Analyze produces dummy evaluation scores for a company.
-// Scores are deterministic per symbol (hash-based) so re-evaluations of
-// the same symbol produce consistent results. Replace this with real
-// analysis logic when ready.
-func Analyze(symbol string) *db.ScoreSet {
-	h := fnv.New32a()
-	h.Write([]byte(symbol))
-	seed := h.Sum32()
+// Analyze fetches real financial data for symbol and returns a ScoreSet.
+// The Financials field holds the Piotroski-based financial health score in [-1, 1].
+// Sentiment, Leadership, and TypeSentiment remain 0 (not yet implemented).
+func Analyze(ctx context.Context, client *finance.Client, symbol string, log *slog.Logger) *db.ScoreSet {
+	ev := finance.NewEvaluator(client, log)
+	financialScore := ev.Evaluate(ctx, symbol)
 
 	return &db.ScoreSet{
 		Symbol:        symbol,
-		Financials:    scoreFromSeed(seed, 0),
-		Sentiment:     scoreFromSeed(seed, 1),
-		Leadership:    scoreFromSeed(seed, 2),
-		TypeSentiment: scoreFromSeed(seed, 3),
+		Financials:    financialScore,
+		Sentiment:     0,
+		Leadership:    0,
+		TypeSentiment: 0,
 	}
-}
-
-// scoreFromSeed returns a value in [-1, 1] derived from the seed and a
-// per-metric offset so each metric produces a different value.
-func scoreFromSeed(seed uint32, offset int) float64 {
-	v := float64((seed>>uint(offset*8))&0xFF) / 255.0
-	return math.Round((v*2-1)*1000) / 1000
 }

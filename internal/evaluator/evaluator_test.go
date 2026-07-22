@@ -14,6 +14,7 @@ import (
 
 	"github.com/example/tsx-evaluator/internal/config"
 	"github.com/example/tsx-evaluator/internal/db"
+	"github.com/example/tsx-evaluator/internal/finance"
 
 	tsxv1 "github.com/example/tsx-tracker/gen/tsx/v1"
 )
@@ -352,8 +353,9 @@ func TestNew(t *testing.T) {
 			return nil
 		},
 	}
+	finCli := finance.NewClient("http://localhost", "key")
 
-	ev := New(cfg, store, log)
+	ev := New(cfg, store, finCli, log)
 	if ev == nil {
 		t.Fatal("expected non-nil Evaluator")
 	}
@@ -367,6 +369,7 @@ func TestNew(t *testing.T) {
 
 func newTestEvaluator(t *testing.T) *Evaluator {
 	t.Helper()
+	finCli := finance.NewClient("http://localhost", "key")
 	return New(&config.Config{}, &mockEvaluatorStore{
 		evaluatedSymbolsFn: func(_ context.Context) (map[string]struct{}, error) {
 			return nil, nil
@@ -374,5 +377,5 @@ func newTestEvaluator(t *testing.T) *Evaluator {
 		upsertScoresFn: func(_ context.Context, _ *db.ScoreSet) error {
 			return nil
 		},
-	}, slog.Default())
+	}, finCli, slog.Default())
 }

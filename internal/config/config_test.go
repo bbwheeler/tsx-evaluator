@@ -10,6 +10,7 @@ func TestLoad_Defaults(t *testing.T) {
 	keys := []string{
 		"GRPC_PORT", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD",
 		"DB_NAME", "DB_SSLMODE", "TRACKER_ADDR", "EVAL_INTERVAL", "EVAL_BATCH_SIZE",
+		"FMP_API_KEY", "FMP_BASE_URL",
 	}
 	for _, k := range keys {
 		t.Setenv(k, "")
@@ -50,6 +51,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.EvalBatchSize != 1 {
 		t.Errorf("EvalBatchSize: got %d, want 1", cfg.EvalBatchSize)
 	}
+	if cfg.FMPAPIKey != "" {
+		t.Errorf("FMPAPIKey: got %q, want empty", cfg.FMPAPIKey)
+	}
+	if cfg.FMPBaseURL != "https://financialmodelingprep.com" {
+		t.Errorf("FMPBaseURL: got %q, want %q", cfg.FMPBaseURL, "https://financialmodelingprep.com")
+	}
 }
 
 func TestLoad_Overrides(t *testing.T) {
@@ -63,6 +70,8 @@ func TestLoad_Overrides(t *testing.T) {
 	t.Setenv("TRACKER_ADDR", "tracker:50051")
 	t.Setenv("EVAL_INTERVAL", "10m")
 	t.Setenv("EVAL_BATCH_SIZE", "10")
+	t.Setenv("FMP_API_KEY", "abc123")
+	t.Setenv("FMP_BASE_URL", "https://custom.fmp.api")
 
 	cfg, err := Load()
 	if err != nil {
@@ -98,6 +107,12 @@ func TestLoad_Overrides(t *testing.T) {
 	}
 	if cfg.EvalBatchSize != 10 {
 		t.Errorf("EvalBatchSize: got %d, want 10", cfg.EvalBatchSize)
+	}
+	if cfg.FMPAPIKey != "abc123" {
+		t.Errorf("FMPAPIKey: got %q, want %q", cfg.FMPAPIKey, "abc123")
+	}
+	if cfg.FMPBaseURL != "https://custom.fmp.api" {
+		t.Errorf("FMPBaseURL: got %q, want %q", cfg.FMPBaseURL, "https://custom.fmp.api")
 	}
 }
 
@@ -147,6 +162,8 @@ func TestPostgresDSN_DefaultConfig(t *testing.T) {
 	t.Setenv("TRACKER_ADDR", "")
 	t.Setenv("EVAL_INTERVAL", "")
 	t.Setenv("EVAL_BATCH_SIZE", "")
+	t.Setenv("FMP_API_KEY", "")
+	t.Setenv("FMP_BASE_URL", "")
 
 	cfg, err := Load()
 	if err != nil {

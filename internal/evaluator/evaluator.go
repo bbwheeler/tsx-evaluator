@@ -13,6 +13,7 @@ import (
 	"github.com/example/tsx-evaluator/internal/analyzer"
 	"github.com/example/tsx-evaluator/internal/config"
 	"github.com/example/tsx-evaluator/internal/db"
+	"github.com/example/tsx-evaluator/internal/finance"
 
 	tsxv1 "github.com/example/tsx-tracker/gen/tsx/v1"
 )
@@ -23,13 +24,14 @@ type Store interface {
 }
 
 type Evaluator struct {
-	cfg  *config.Config
-	repo Store
-	log  *slog.Logger
+	cfg    *config.Config
+	repo   Store
+	finCli *finance.Client
+	log    *slog.Logger
 }
 
-func New(cfg *config.Config, repo Store, log *slog.Logger) *Evaluator {
-	return &Evaluator{cfg: cfg, repo: repo, log: log}
+func New(cfg *config.Config, repo Store, finCli *finance.Client, log *slog.Logger) *Evaluator {
+	return &Evaluator{cfg: cfg, repo: repo, finCli: finCli, log: log}
 }
 
 func (e *Evaluator) Run(ctx context.Context) {
@@ -111,7 +113,7 @@ func (e *Evaluator) cycle(ctx context.Context) {
 	})
 
 	for _, symbol := range candidates[:batch] {
-		scores := analyzer.Analyze(symbol)
+		scores := analyzer.Analyze(ctx, e.finCli, symbol, e.log)
 		if err := e.repo.UpsertScores(ctx, scores); err != nil {
 			e.log.Error("store scores", "symbol", symbol, "error", err)
 			continue

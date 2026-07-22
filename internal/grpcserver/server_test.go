@@ -2,7 +2,10 @@ package grpcserver
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 
 	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
 	"github.com/example/tsx-evaluator/internal/db"
+	"github.com/example/tsx-evaluator/internal/finance"
 )
 
 // mockStore implements the Store interface for testing.
@@ -38,7 +42,42 @@ func (m *mockStore) UpsertScores(ctx context.Context, s *db.ScoreSet) error {
 }
 
 func newTestServer(store Store) *Server {
-	return New(store, slog.Default())
+	return New(store, testFinanceClient(), slog.Default())
+}
+
+func testFinanceClient() *finance.Client {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		switch {
+		case contains(path, "income-statement"):
+			json.NewEncoder(w).Encode([]finance.IncomeStatement{
+				{Symbol: "DUMMY", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
+				{Symbol: "DUMMY", Revenue: 800e6, NetIncome: 80e6, GrossProfit: 300e6},
+			})
+		case contains(path, "balance-sheet-statement"):
+			json.NewEncoder(w).Encode([]finance.BalanceSheet{
+				{Symbol: "DUMMY", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
+					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
+				{Symbol: "DUMMY", TotalAssets: 1.8e9, TotalCurrentAssets: 900e6,
+					TotalCurrentLiabilities: 550e6, TotalStockholdersEquity: 1.2e9, CommonStock: 10e6},
+			})
+		default:
+			w.Write([]byte("[]"))
+		}
+	}))
+	_ = server
+	// Use the default FMP URL; the client will fail gracefully and return 0.
+	return finance.NewClient("http://localhost:0", "test-key")
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
 
 func TestGetScores_EmptySymbol(t *testing.T) {
