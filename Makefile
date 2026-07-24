@@ -37,7 +37,7 @@ quadlet-install:
 	./deploy/install.sh
 
 quadlet-build:
-	podman build --no-cache -t localhost/tsx-evaluator:latest .
+	podman build --no-cache -f Containerfile -t localhost/tsx-evaluator:latest ..
 
 quadlet-enable: quadlet-build
 	systemctl --user daemon-reload

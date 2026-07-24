@@ -1,16 +1,15 @@
 # Build stage
-FROM golang:1.22-bookworm AS build
+FROM golang:1.25-bookworm AS build
 WORKDIR /src
 
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
     go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
-# Copy go.mod/sum first for layer caching, then source.
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
+# Copy evaluator source and its tracker dependency (go.mod replace directive).
+COPY . /src/tsx-evaluator
+COPY ../tsx-tracker /src/tsx-tracker
+WORKDIR /src/tsx-evaluator
 
 ENV PATH="$PATH:/root/go/bin"
 RUN protoc \
@@ -18,6 +17,7 @@ RUN protoc \
       --go-grpc_out=gen --go-grpc_opt=paths=source_relative,require_unimplemented_servers=false \
       -I proto proto/tsx/v1/evaluator.proto
 
+RUN go mod tidy
 RUN CGO_ENABLED=0 go build -o /out/tsx-evaluator ./cmd/server
 
 # Runtime stage
