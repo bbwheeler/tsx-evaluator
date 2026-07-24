@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	"github.com/example/tsx-evaluator/internal/finance"
+	"github.com/example/tsx-evaluator/internal/leadership"
+	"github.com/example/tsx-evaluator/internal/sentiment"
+	"github.com/example/tsx-evaluator/internal/typesentiment"
 )
 
 func newMockFMPServer(t *testing.T) *httptest.Server {
@@ -37,12 +40,23 @@ func newMockFMPServer(t *testing.T) *httptest.Server {
 	}))
 }
 
+func newTypeSentEvForTest(serverURL string) *typesentiment.Evaluator {
+	profileCli := typesentiment.NewProfileClient(serverURL, "test-key")
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	return typesentiment.NewEvaluator(profileCli, llmClient, slog.Default())
+}
+
 func TestAnalyze_ReturnsRealScore(t *testing.T) {
 	server := newMockFMPServer(t)
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
-	scores := Analyze(context.Background(), client, "TEST.TO", slog.Default())
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 
 	if scores.Symbol != "TEST.TO" {
 		t.Errorf("symbol: got %q, want %q", scores.Symbol, "TEST.TO")
@@ -53,22 +67,83 @@ func TestAnalyze_ReturnsRealScore(t *testing.T) {
 	t.Logf("financial score: %.3f", scores.Financials)
 }
 
-func TestAnalyze_SentimentFieldsZero(t *testing.T) {
-	server := newMockFMPServer(t)
+func TestAnalyze_TypeSentimentReturnsScore(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		switch {
+		case contains(path, "income-statement"):
+			json.NewEncoder(w).Encode([]finance.IncomeStatement{
+				{Symbol: "TECH.TO", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
+			})
+		case contains(path, "balance-sheet-statement"):
+			json.NewEncoder(w).Encode([]finance.BalanceSheet{
+				{Symbol: "TECH.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
+					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
+			})
+		case contains(path, "profile"):
+			json.NewEncoder(w).Encode([]typesentiment.CompanyProfile{
+				{Symbol: "TECH.TO", CompanyName: "Tech Corp", Sector: "Technology", Industry: "Software"},
+			})
+		default:
+			w.Write([]byte("[]"))
+		}
+	}))
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
-	scores := Analyze(context.Background(), client, "TEST.TO", slog.Default())
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TECH.TO", slog.Default())
 
-	if scores.Sentiment != 0 {
-		t.Errorf("sentiment: got %v, want 0", scores.Sentiment)
+	// TypeSentiment will be 0 since the Google News RSS will fail (no real network in tests)
+	// but the profile should be fetched successfully
+	if scores.TypeSentiment < -1 || scores.TypeSentiment > 1 {
+		t.Errorf("type_sentiment out of range: %v", scores.TypeSentiment)
 	}
-	if scores.Leadership != 0 {
-		t.Errorf("leadership: got %v, want 0", scores.Leadership)
+	t.Logf("type_sentiment score: %.3f", scores.TypeSentiment)
+}
+
+func TestAnalyze_LeadershipReturnsScore(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		switch {
+		case contains(path, "income-statement"):
+			json.NewEncoder(w).Encode([]finance.IncomeStatement{
+				{Symbol: "LEAD.TO", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
+			})
+		case contains(path, "balance-sheet-statement"):
+			json.NewEncoder(w).Encode([]finance.BalanceSheet{
+				{Symbol: "LEAD.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
+					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
+			})
+		case contains(path, "key-executives"):
+			json.NewEncoder(w).Encode([]leadership.Executive{
+				{Name: "Jane Doe", Title: "Chief Executive Officer", Since: "2015", Age: 55},
+				{Name: "John Smith", Title: "Chief Financial Officer", Since: "2018", Age: 48},
+			})
+		default:
+			w.Write([]byte("[]"))
+		}
+	}))
+	defer server.Close()
+
+	client := finance.NewClient(server.URL, "test-key")
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "LEAD.TO", slog.Default())
+
+	if scores.Leadership < -1 || scores.Leadership > 1 {
+		t.Errorf("leadership out of range: %v", scores.Leadership)
 	}
-	if scores.TypeSentiment != 0 {
-		t.Errorf("type_sentiment: got %v, want 0", scores.TypeSentiment)
-	}
+	t.Logf("leadership score: %.3f", scores.Leadership)
 }
 
 func TestAnalyze_NoData(t *testing.T) {
@@ -79,7 +154,12 @@ func TestAnalyze_NoData(t *testing.T) {
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
-	scores := Analyze(context.Background(), client, "MISSING.TO", slog.Default())
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "MISSING.TO", slog.Default())
 
 	if scores.Financials != 0 {
 		t.Errorf("expected 0 for missing data, got %v", scores.Financials)
@@ -93,7 +173,12 @@ func TestAnalyze_APIError(t *testing.T) {
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
-	scores := Analyze(context.Background(), client, "ERR.TO", slog.Default())
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "ERR.TO", slog.Default())
 
 	if scores.Financials != 0 {
 		t.Errorf("expected 0 for API error, got %v", scores.Financials)
@@ -105,8 +190,13 @@ func TestAnalyze_Deterministic(t *testing.T) {
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
-	s1 := Analyze(context.Background(), client, "TEST.TO", slog.Default())
-	s2 := Analyze(context.Background(), client, "TEST.TO", slog.Default())
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	s1 := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
+	s2 := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 
 	if s1.Financials != s2.Financials {
 		t.Errorf("non-deterministic: %v vs %v", s1.Financials, s2.Financials)
@@ -134,7 +224,12 @@ func TestAnalyze_ScoreBounds(t *testing.T) {
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
-	scores := Analyze(context.Background(), client, "EXTREME.TO", slog.Default())
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
+	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "EXTREME.TO", slog.Default())
 
 	if scores.Financials < -1 || scores.Financials > 1 {
 		t.Errorf("score out of bounds: %v", scores.Financials)
@@ -162,12 +257,17 @@ func BenchmarkAnalyze(b *testing.B) {
 	defer server.Close()
 
 	client := finance.NewClient(server.URL, "test-key")
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentEv := newTypeSentEvForTest(server.URL)
 	log := slog.Default()
 	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Analyze(ctx, client, "BENCH.TO", log)
+		Analyze(ctx, client, sentEv, leadEv, typeSentEv, "BENCH.TO", log)
 	}
 }
 

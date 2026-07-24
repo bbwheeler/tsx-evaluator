@@ -15,6 +15,9 @@ import (
 	"github.com/example/tsx-evaluator/internal/config"
 	"github.com/example/tsx-evaluator/internal/db"
 	"github.com/example/tsx-evaluator/internal/finance"
+	"github.com/example/tsx-evaluator/internal/leadership"
+	"github.com/example/tsx-evaluator/internal/sentiment"
+	"github.com/example/tsx-evaluator/internal/typesentiment"
 
 	tsxv1 "github.com/example/tsx-tracker/gen/tsx/v1"
 )
@@ -354,8 +357,14 @@ func TestNew(t *testing.T) {
 		},
 	}
 	finCli := finance.NewClient("http://localhost", "key")
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, log)
+	leadFmpCli := leadership.NewFMPClient("http://localhost", "key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, log)
+	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost", "key")
+	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, log)
 
-	ev := New(cfg, store, finCli, log)
+	ev := New(cfg, store, finCli, sentEv, leadEv, typeSentEv, log)
 	if ev == nil {
 		t.Fatal("expected non-nil Evaluator")
 	}
@@ -370,6 +379,12 @@ func TestNew(t *testing.T) {
 func newTestEvaluator(t *testing.T) *Evaluator {
 	t.Helper()
 	finCli := finance.NewClient("http://localhost", "key")
+	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
+	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
+	leadFmpCli := leadership.NewFMPClient("http://localhost", "key")
+	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost", "key")
+	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, slog.Default())
 	return New(&config.Config{}, &mockEvaluatorStore{
 		evaluatedSymbolsFn: func(_ context.Context) (map[string]struct{}, error) {
 			return nil, nil
@@ -377,5 +392,5 @@ func newTestEvaluator(t *testing.T) *Evaluator {
 		upsertScoresFn: func(_ context.Context, _ *db.ScoreSet) error {
 			return nil
 		},
-	}, finCli, slog.Default())
+	}, finCli, sentEv, leadEv, typeSentEv, slog.Default())
 }

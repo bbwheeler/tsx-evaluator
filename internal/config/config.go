@@ -22,6 +22,10 @@ type Config struct {
 
 	FMPAPIKey  string
 	FMPBaseURL string
+
+	LLMBaseURL string
+	LLMModel   string
+	LLMTimeout time.Duration
 }
 
 func Load() (*Config, error) {
@@ -38,6 +42,9 @@ func Load() (*Config, error) {
 		EvalBatchSize: getEnvInt("EVAL_BATCH_SIZE", 1),
 		FMPAPIKey:     getEnv("FMP_API_KEY", ""),
 		FMPBaseURL:    getEnv("FMP_BASE_URL", "https://financialmodelingprep.com"),
+		LLMBaseURL:    getEnv("LLM_BASE_URL", "http://localhost:11434"),
+		LLMModel:      getEnv("LLM_MODEL", "llama3"),
+		LLMTimeout:    getEnvDuration("LLM_TIMEOUT", 60*time.Second),
 	}
 
 	if cfg.EvalInterval < time.Second {
