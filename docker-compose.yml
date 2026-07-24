@@ -12,6 +12,9 @@ services:
       TRACKER_ADDR: "tsx-tracker:50051"
       EVAL_INTERVAL: "5m"
       EVAL_BATCH_SIZE: "1"
+      LLM_BASE_URL: "http://host.docker.internal:11434"
+      LLM_MODEL: "llama3"
+      LLM_TIMEOUT: "60s"
     ports:
       - "50052:50052"
     depends_on:

@@ -11,6 +11,9 @@ import (
 	"github.com/example/tsx-evaluator/internal/analyzer"
 	"github.com/example/tsx-evaluator/internal/db"
 	"github.com/example/tsx-evaluator/internal/finance"
+	"github.com/example/tsx-evaluator/internal/leadership"
+	"github.com/example/tsx-evaluator/internal/sentiment"
+	"github.com/example/tsx-evaluator/internal/typesentiment"
 
 	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
 )
@@ -27,13 +30,16 @@ type Store interface {
 
 type Server struct {
 	tsxv1.UnimplementedEvaluatorServiceServer
-	repo   Store
-	finCli *finance.Client
-	log    *slog.Logger
+	repo      Store
+	finCli    *finance.Client
+	sentEv    *sentiment.Evaluator
+	leadEv    *leadership.Evaluator
+	typeSentEv *typesentiment.Evaluator
+	log       *slog.Logger
 }
 
-func New(repo Store, finCli *finance.Client, log *slog.Logger) *Server {
-	return &Server{repo: repo, finCli: finCli, log: log}
+func New(repo Store, finCli *finance.Client, sentEv *sentiment.Evaluator, leadEv *leadership.Evaluator, typeSentEv *typesentiment.Evaluator, log *slog.Logger) *Server {
+	return &Server{repo: repo, finCli: finCli, sentEv: sentEv, leadEv: leadEv, typeSentEv: typeSentEv, log: log}
 }
 
 func (s *Server) GetScores(ctx context.Context, req *tsxv1.GetScoresRequest) (*tsxv1.GetScoresResponse, error) {
@@ -109,7 +115,7 @@ func (s *Server) ListScoredStocks(ctx context.Context, req *tsxv1.ListScoredStoc
 }
 
 func (s *Server) EvaluateNow(ctx context.Context, req *tsxv1.EvaluateNowRequest) (*tsxv1.EvaluateNowResponse, error) {
-	scores := analyzer.Analyze(ctx, s.finCli, "DUMMY", s.log)
+	scores := analyzer.Analyze(ctx, s.finCli, s.sentEv, s.leadEv, s.typeSentEv, "DUMMY", s.log)
 	if err := s.repo.UpsertScores(ctx, scores); err != nil {
 		s.log.Error("EvaluateNow upsert failed", "error", err)
 		return nil, status.Error(codes.Internal, "internal error")
@@ -119,7 +125,7 @@ func (s *Server) EvaluateNow(ctx context.Context, req *tsxv1.EvaluateNowRequest)
 
 func toProto(s *db.ScoreSet) *tsxv1.ScoreSet {
 	return &tsxv1.ScoreSet{
-		Symbol:       s.Symbol,
+		Symbol:        s.Symbol,
 		Financials:   s.Financials,
 		Sentiment:    s.Sentiment,
 		Leadership:   s.Leadership,

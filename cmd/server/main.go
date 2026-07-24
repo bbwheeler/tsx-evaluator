@@ -17,6 +17,9 @@ import (
 	"github.com/example/tsx-evaluator/internal/evaluator"
 	"github.com/example/tsx-evaluator/internal/finance"
 	"github.com/example/tsx-evaluator/internal/grpcserver"
+	"github.com/example/tsx-evaluator/internal/leadership"
+	"github.com/example/tsx-evaluator/internal/sentiment"
+	"github.com/example/tsx-evaluator/internal/typesentiment"
 
 	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
 )
@@ -53,8 +56,20 @@ func run(log *slog.Logger) error {
 	// Financial data client
 	finCli := finance.NewClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
 
+	// Sentiment analysis
+	llmClient := sentiment.NewLLMClient(cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMTimeout)
+	sentEv := sentiment.NewEvaluator(llmClient, log)
+
+	// Leadership analysis
+	leadFmpCli := leadership.NewFMPClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
+	leadEv := leadership.NewEvaluator(leadFmpCli, log)
+
+	// Type sentiment analysis (sector/industry outlook)
+	typeSentProfileCli := typesentiment.NewProfileClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
+	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, log)
+
 	// Background evaluator loop
-	eval := evaluator.New(cfg, repo, finCli, log)
+	eval := evaluator.New(cfg, repo, finCli, sentEv, leadEv, typeSentEv, log)
 	go eval.Run(ctx)
 
 	// gRPC server
@@ -64,7 +79,7 @@ func run(log *slog.Logger) error {
 	}
 
 	grpcSrv := grpc.NewServer()
-	tsxv1.RegisterEvaluatorServiceServer(grpcSrv, grpcserver.New(repo, finCli, log))
+	tsxv1.RegisterEvaluatorServiceServer(grpcSrv, grpcserver.New(repo, finCli, sentEv, leadEv, typeSentEv, log))
 	reflection.Register(grpcSrv)
 
 	go func() {
