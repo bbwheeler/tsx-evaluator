@@ -1,0 +1,15 @@
+[Container]
+Image=localhost/tsx-evaluator:latest
+PublishPort=50052:50052
+EnvironmentFile=/etc/tsx-evaluator/.env.podman
+Network=host
+PodmanArgs=--read-only
+PodmanArgs=--tmpfs=/tmp:rw,noexec,nosuid,size=64m
+AutoUpdate=local
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
