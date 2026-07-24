@@ -1,3 +1,4 @@
 [Build]
-Containerfile=/opt/tsx-evaluator/Containerfile
-Image=localhost/tsx-evaluator:latest
+File=%h/tsx-evaluator/Containerfile
+SetWorkingDirectory=%h/tsx-evaluator
+ImageTag=localhost/tsx-evaluator:latest
