@@ -34,12 +34,12 @@ podman-down:
 	podman-compose -f podman-compose.yml down
 
 quadlet-install:
-	sudo ./deploy/install.sh
+	./deploy/install.sh
 
 quadlet-build:
 	podman build --no-cache -t localhost/tsx-evaluator:latest .
 
 quadlet-enable: quadlet-build
-	systemctl daemon-reload
-	systemctl start tsx-evaluator-build.service
-	systemctl enable --now tsx-evaluator.service
+	systemctl --user daemon-reload
+	systemctl --user start tsx-evaluator-build.service
+	systemctl --user enable --now tsx-evaluator.service
