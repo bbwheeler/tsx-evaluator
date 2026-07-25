@@ -7,8 +7,8 @@ RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
 RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
 # Copy evaluator source and its tracker dependency (go.mod replace directive).
-COPY . /src/tsx-evaluator
-COPY ../tsx-tracker /src/tsx-tracker
+COPY tsx-evaluator /src/tsx-evaluator
+COPY tsx-tracker /src/tsx-tracker
 WORKDIR /src/tsx-evaluator
 
 ENV PATH="$PATH:/root/go/bin"
