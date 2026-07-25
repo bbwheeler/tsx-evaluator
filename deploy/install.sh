@@ -14,6 +14,11 @@ cp -r "$PROJECT_DIR"/Containerfile "$PROJECT_DIR"/go.mod "$PROJECT_DIR"/go.sum \
 # Remove local bin/ and gen/ artifacts if present -- the build regenerates them.
 rm -rf "$INSTALL_DIR/bin" "$INSTALL_DIR/gen"
 
+# Symlink tracker source so the Containerfile COPY can find it in the build context.
+if [[ ! -e "$HOME/tsx-tracker" ]]; then
+  ln -s /opt/tsx-tracker "$HOME/tsx-tracker"
+fi
+
 echo "==> Installing Quadlet units to $QUADLET_DIR"
 mkdir -p "$QUADLET_DIR"
 cp "$SCRIPT_DIR"/quadlet/tsx-evaluator.build "$QUADLET_DIR/"
