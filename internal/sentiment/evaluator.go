@@ -11,7 +11,6 @@ type Evaluator struct {
 	llmClient    *LLMClient
 	yahooClient  *YahooRSSClient
 	googleClient *GoogleNewsClient
-	redditClient *RedditClient
 	log          *slog.Logger
 }
 
@@ -24,7 +23,6 @@ func NewEvaluator(
 		llmClient:    llmClient,
 		yahooClient:  NewYahooRSSClient(),
 		googleClient: NewGoogleNewsClient("en-US"),
-		redditClient: NewRedditClient(nil),
 		log:          log,
 	}
 }
@@ -74,7 +72,7 @@ func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Artic
 	}
 
 	var wg sync.WaitGroup
-	results := make(chan sourceResult, 3)
+	results := make(chan sourceResult, 2)
 
 	// Yahoo Finance RSS
 	wg.Add(1)
@@ -89,14 +87,6 @@ func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Artic
 	go func() {
 		defer wg.Done()
 		articles, err := e.googleClient.FetchArticles(ctx, symbol, 15)
-		results <- sourceResult{articles, err}
-	}()
-
-	// Reddit
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		articles, err := e.redditClient.FetchArticles(ctx, symbol, 10)
 		results <- sourceResult{articles, err}
 	}()
 
