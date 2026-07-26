@@ -1,4 +1,4 @@
-package typesentiment
+package leadership
 
 import (
 	"context"
@@ -8,20 +8,19 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
-	"sync"
 	"time"
 )
 
-type ProfileClient struct {
-	baseURL    string
+// YahooClient fetches executive data from Yahoo Finance's quoteSummary API.
+type YahooClient struct {
 	httpClient *http.Client
-	mu         sync.Mutex
 	crumb      string
 }
 
-func NewProfileClient() *ProfileClient {
+// NewYahooClient creates a Yahoo Finance client with cookie/crumb support.
+func NewYahooClient() *YahooClient {
 	jar, _ := cookiejar.New(nil)
-	return &ProfileClient{
+	return &YahooClient{
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 			Jar:     jar,
@@ -32,24 +31,7 @@ func NewProfileClient() *ProfileClient {
 	}
 }
 
-func NewProfileClientForTest(baseURL string) *ProfileClient {
-	return &ProfileClient{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-		crumb: "test-crumb",
-	}
-}
-
-func (c *ProfileClient) baseURLForRequest() string {
-	if c.baseURL != "" {
-		return c.baseURL
-	}
-	return "https://query2.finance.yahoo.com"
-}
-
-func (c *ProfileClient) ensureCrumb(ctx context.Context) error {
+func (c *YahooClient) ensureCrumb(ctx context.Context) error {
 	if c.crumb != "" {
 		return nil
 	}
@@ -79,16 +61,14 @@ func (c *ProfileClient) ensureCrumb(ctx context.Context) error {
 	return nil
 }
 
-func (c *ProfileClient) GetProfile(ctx context.Context, symbol string) (*CompanyProfile, error) {
-	c.mu.Lock()
-	err := c.ensureCrumb(ctx)
-	c.mu.Unlock()
-	if err != nil {
+// GetExecutives returns key executives from Yahoo Finance's assetProfile.
+func (c *YahooClient) GetExecutives(ctx context.Context, symbol string) ([]Executive, error) {
+	if err := c.ensureCrumb(ctx); err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/v10/finance/quoteSummary/%s?modules=assetProfile,defaultKeyStatistics,summaryDetail&crumb=%s",
-		c.baseURLForRequest(), symbol, c.crumb)
+	url := fmt.Sprintf("https://query2.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=assetProfile&crumb=%s",
+		symbol, c.crumb)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
@@ -109,54 +89,41 @@ func (c *ProfileClient) GetProfile(ctx context.Context, symbol string) (*Company
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	var result yahooProfileResponse
+	var result yahooQuoteSummary
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	if len(result.QuoteSummary.Result) == 0 {
-		return nil, fmt.Errorf("no profile data for %s", symbol)
+		return nil, nil
 	}
 
-	profile := result.QuoteSummary.Result[0]
-	asset := profile.AssetProfile
-	summary := profile.SummaryDetail
-	stats := profile.DefaultKeyStatistics
-
-	return &CompanyProfile{
-		Symbol:         symbol,
-		CompanyName:    asset.CompanyName,
-		Sector:         asset.Sector,
-		Industry:       asset.Industry,
-		Description:    asset.Description,
-		Employees:      asset.FullTimeEmployees,
-		MarketCap:      summary.MarketCap.Raw,
-		Price:          summary.CurrentPrice.Raw,
-		Beta:           stats.Beta.Raw,
-	}, nil
+	officers := result.QuoteSummary.Result[0].AssetProfile.CompanyOfficers
+	var executives []Executive
+	for _, o := range officers {
+		executives = append(executives, Executive{
+			Name:        o.Name,
+			Title:       o.Title,
+			Age:         o.Age,
+			YearOfBirth: o.YearOfBirth,
+		})
+	}
+	return executives, nil
 }
 
-type yahooProfileResponse struct {
+type yahooQuoteSummary struct {
 	QuoteSummary struct {
 		Result []struct {
 			AssetProfile struct {
-				CompanyName      string `json:"companyName"`
-				Sector           string `json:"sector"`
-				Industry         string `json:"industry"`
-				Description      string `json:"description"`
-				FullTimeEmployees int   `json:"fullTimeEmployees"`
+				CompanyOfficers []yahooOfficer `json:"companyOfficers"`
 			} `json:"assetProfile"`
-			SummaryDetail struct {
-				MarketCap    yahooValue `json:"marketCap"`
-				CurrentPrice yahooValue `json:"currentPrice"`
-			} `json:"summaryDetail"`
-			DefaultKeyStatistics struct {
-				Beta yahooValue `json:"beta"`
-			} `json:"defaultKeyStatistics"`
 		} `json:"result"`
 	} `json:"quoteSummary"`
 }
 
-type yahooValue struct {
-	Raw float64 `json:"raw"`
+type yahooOfficer struct {
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Age         int    `json:"age"`
+	YearOfBirth int    `json:"yearOfBirth"`
 }

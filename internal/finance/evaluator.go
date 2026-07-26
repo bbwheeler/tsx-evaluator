@@ -6,7 +6,7 @@ import (
 )
 
 // Evaluator scores a company's financial health using the Piotroski F-Score
-// and supplementary metrics fetched from the FMP API.
+// and supplementary metrics fetched from Yahoo Finance.
 type Evaluator struct {
 	client *Client
 	log    *slog.Logger

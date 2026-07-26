@@ -53,19 +53,18 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("database ready")
 
-	// Financial data client
-	finCli := finance.NewClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
+	// Financial data client (Yahoo Finance, no API key needed)
+	finCli := finance.NewClient()
 
 	// Sentiment analysis
 	llmClient := sentiment.NewLLMClient(cfg.LLMBaseURL, cfg.LLMModel, cfg.LLMTimeout)
 	sentEv := sentiment.NewEvaluator(llmClient, log)
 
 	// Leadership analysis
-	leadFmpCli := leadership.NewFMPClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
-	leadEv := leadership.NewEvaluator(leadFmpCli, log)
+	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), log)
 
-	// Type sentiment analysis (sector/industry outlook)
-	typeSentProfileCli := typesentiment.NewProfileClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
+	// Type sentiment analysis (sector/industry outlook via Yahoo Finance)
+	typeSentProfileCli := typesentiment.NewProfileClient()
 	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, log)
 
 	// Background evaluator loop

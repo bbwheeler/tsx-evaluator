@@ -1,6 +1,6 @@
 package typesentiment
 
-// CompanyProfile holds sector/industry data from FMP profile API.
+// CompanyProfile holds sector/industry data from Yahoo Finance.
 type CompanyProfile struct {
 	Symbol         string  `json:"symbol"`
 	CompanyName    string  `json:"companyName"`

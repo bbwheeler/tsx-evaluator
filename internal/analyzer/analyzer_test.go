@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -14,48 +15,100 @@ import (
 	"github.com/example/tsx-evaluator/internal/typesentiment"
 )
 
-func newMockFMPServer(t *testing.T) *httptest.Server {
-	t.Helper()
+func timeseriesResponse(data map[string][]tsEntry) map[string]any {
+	result := map[string]any{
+		"timeseries": map[string]any{
+			"result": []any{
+				data,
+			},
+		},
+	}
+	return result
+}
+
+type tsEntry struct {
+	AsOfDate      string `json:"asOfDate"`
+	PeriodType    string `json:"periodType"`
+	ReportedValue struct {
+		Raw float64 `json:"raw"`
+	} `json:"reportedValue"`
+}
+
+func tsEntryVal(date string, val float64) tsEntry {
+	e := tsEntry{AsOfDate: date, PeriodType: "12M"}
+	e.ReportedValue.Raw = val
+	return e
+}
+
+func mockYahooTimeserver(handler func(symbol string) map[string][]tsEntry) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]finance.IncomeStatement{
-				{Symbol: "TEST.TO", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6, GrossProfitRatio: 0.4},
-				{Symbol: "TEST.TO", Revenue: 800e6, NetIncome: 80e6, GrossProfit: 300e6, GrossProfitRatio: 0.375},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]finance.BalanceSheet{
-				{Symbol: "TEST.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
-					TotalCurrentLiabilities: 500e6, TotalDebt: 200e6,
-					LongTermDebt: 100e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
-				{Symbol: "TEST.TO", TotalAssets: 1.8e9, TotalCurrentAssets: 900e6,
-					TotalCurrentLiabilities: 550e6, TotalDebt: 300e6,
-					LongTermDebt: 200e6, TotalStockholdersEquity: 1.2e9, CommonStock: 10e6},
-			})
-		default:
-			w.Write([]byte("[]"))
+		symbol := r.URL.Query().Get("symbol")
+		if symbol == "" {
+			symbol = "TEST.TO"
 		}
+		data := handler(symbol)
+		resp := timeseriesResponse(data)
+		json.NewEncoder(w).Encode(resp)
 	}))
 }
 
-func newTypeSentEvForTest(serverURL string) *typesentiment.Evaluator {
-	profileCli := typesentiment.NewProfileClient(serverURL, "test-key")
+func mockProfileServer(handler func(symbol string) map[string]any) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		symbol := r.URL.Query().Get("symbol")
+		if symbol == "" {
+			symbol = "TEST.TO"
+		}
+		json.NewEncoder(w).Encode(handler(symbol))
+	}))
+}
+
+func newMockFinanceAndProfileServers(t *testing.T) (*httptest.Server, *httptest.Server) {
+	t.Helper()
+
+	financeServer := mockYahooTimeserver(func(symbol string) map[string][]tsEntry {
+		return map[string][]tsEntry{
+			"annualTotalRevenue":    {tsEntryVal("2024-12-31", 1e9), tsEntryVal("2023-12-31", 800e6)},
+			"annualGrossProfit":     {tsEntryVal("2024-12-31", 400e6), tsEntryVal("2023-12-31", 300e6)},
+			"annualOperatingIncome": {tsEntryVal("2024-12-31", 200e6)},
+			"annualNetIncome":       {tsEntryVal("2024-12-31", 100e6), tsEntryVal("2023-12-31", 80e6)},
+			"annualTotalAssets":     {tsEntryVal("2024-12-31", 2e9), tsEntryVal("2023-12-31", 1.8e9)},
+			"annualCurrentAssets":   {tsEntryVal("2024-12-31", 1e9), tsEntryVal("2023-12-31", 900e6)},
+			"annualCurrentLiabilities": {tsEntryVal("2024-12-31", 500e6), tsEntryVal("2023-12-31", 550e6)},
+			"annualStockholdersEquity": {tsEntryVal("2024-12-31", 1.5e9), tsEntryVal("2023-12-31", 1.2e9)},
+			"annualCommonStock":     {tsEntryVal("2024-12-31", 10e6), tsEntryVal("2023-12-31", 10e6)},
+			"annualTotalDebt":       {tsEntryVal("2024-12-31", 200e6)},
+			"annualLongTermDebt":    {tsEntryVal("2024-12-31", 100e6), tsEntryVal("2023-12-31", 200e6)},
+		}
+	})
+
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{
+			"quoteSummary": map[string]any{
+				"result": []map[string]any{},
+			},
+		}
+	})
+
+	return financeServer, profileServer
+}
+
+func newTypeSentEvForTest(profileURL string) *typesentiment.Evaluator {
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
-	return typesentiment.NewEvaluator(profileCli, llmClient, slog.Default())
+	return typesentiment.NewEvaluatorForTest(profileURL, llmClient, slog.Default())
 }
 
 func TestAnalyze_ReturnsRealScore(t *testing.T) {
-	server := newMockFMPServer(t)
-	defer server.Close()
+	financeServer, profileServer := newMockFinanceAndProfileServers(t)
+	defer financeServer.Close()
+	defer profileServer.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	client := finance.NewClientWithBaseURL(financeServer.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 
 	if scores.Symbol != "TEST.TO" {
@@ -68,39 +121,46 @@ func TestAnalyze_ReturnsRealScore(t *testing.T) {
 }
 
 func TestAnalyze_TypeSentimentReturnsScore(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]finance.IncomeStatement{
-				{Symbol: "TECH.TO", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]finance.BalanceSheet{
-				{Symbol: "TECH.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
-					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
-			})
-		case contains(path, "profile"):
-			json.NewEncoder(w).Encode([]typesentiment.CompanyProfile{
-				{Symbol: "TECH.TO", CompanyName: "Tech Corp", Sector: "Technology", Industry: "Software"},
-			})
-		default:
-			w.Write([]byte("[]"))
+	financeServer := mockYahooTimeserver(func(symbol string) map[string][]tsEntry {
+		return map[string][]tsEntry{
+			"annualTotalRevenue":       {tsEntryVal("2024-12-31", 1e9)},
+			"annualGrossProfit":        {tsEntryVal("2024-12-31", 400e6)},
+			"annualNetIncome":          {tsEntryVal("2024-12-31", 100e6)},
+			"annualTotalAssets":        {tsEntryVal("2024-12-31", 2e9)},
+			"annualCurrentAssets":      {tsEntryVal("2024-12-31", 1e9)},
+			"annualCurrentLiabilities": {tsEntryVal("2024-12-31", 500e6)},
+			"annualStockholdersEquity": {tsEntryVal("2024-12-31", 1.5e9)},
+			"annualCommonStock":        {tsEntryVal("2024-12-31", 10e6)},
 		}
-	}))
-	defer server.Close()
+	})
+	defer financeServer.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{
+			"quoteSummary": map[string]any{
+				"result": []map[string]any{
+					{
+						"assetProfile": map[string]any{
+							"companyName":    "Tech Corp",
+							"sector":         "Technology",
+							"industry":       "Software",
+							"description":    "A tech company",
+							"fullTimeEmployees": 1000,
+						},
+					},
+				},
+			},
+		}
+	})
+	defer profileServer.Close()
+
+	client := finance.NewClientWithBaseURL(financeServer.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TECH.TO", slog.Default())
 
-	// TypeSentiment will be 0 since the Google News RSS will fail (no real network in tests)
-	// but the profile should be fetched successfully
 	if scores.TypeSentiment < -1 || scores.TypeSentiment > 1 {
 		t.Errorf("type_sentiment out of range: %v", scores.TypeSentiment)
 	}
@@ -108,36 +168,35 @@ func TestAnalyze_TypeSentimentReturnsScore(t *testing.T) {
 }
 
 func TestAnalyze_LeadershipReturnsScore(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]finance.IncomeStatement{
-				{Symbol: "LEAD.TO", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]finance.BalanceSheet{
-				{Symbol: "LEAD.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
-					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
-			})
-		case contains(path, "key-executives"):
-			json.NewEncoder(w).Encode([]leadership.Executive{
-				{Name: "Jane Doe", Title: "Chief Executive Officer", Since: "2015", Age: 55},
-				{Name: "John Smith", Title: "Chief Financial Officer", Since: "2018", Age: 48},
-			})
-		default:
-			w.Write([]byte("[]"))
+	financeServer := mockYahooTimeserver(func(symbol string) map[string][]tsEntry {
+		return map[string][]tsEntry{
+			"annualTotalRevenue":       {tsEntryVal("2024-12-31", 1e9)},
+			"annualGrossProfit":        {tsEntryVal("2024-12-31", 400e6)},
+			"annualNetIncome":          {tsEntryVal("2024-12-31", 100e6)},
+			"annualTotalAssets":        {tsEntryVal("2024-12-31", 2e9)},
+			"annualCurrentAssets":      {tsEntryVal("2024-12-31", 1e9)},
+			"annualCurrentLiabilities": {tsEntryVal("2024-12-31", 500e6)},
+			"annualStockholdersEquity": {tsEntryVal("2024-12-31", 1.5e9)},
+			"annualCommonStock":        {tsEntryVal("2024-12-31", 10e6)},
 		}
-	}))
-	defer server.Close()
+	})
+	defer financeServer.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{"quoteSummary": map[string]any{"result": []map[string]any{}}}
+	})
+	defer profileServer.Close()
+
+	client := finance.NewClientWithBaseURL(financeServer.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{
+		executives: []leadership.Executive{
+			{Name: "Jane Doe", Title: "Chief Executive Officer", YearOfBirth: 1970},
+			{Name: "John Smith", Title: "Chief Financial Officer", YearOfBirth: 1977},
+		},
+	}, slog.Default())
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "LEAD.TO", slog.Default())
 
 	if scores.Leadership < -1 || scores.Leadership > 1 {
@@ -147,18 +206,22 @@ func TestAnalyze_LeadershipReturnsScore(t *testing.T) {
 }
 
 func TestAnalyze_NoData(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
-	}))
+	server := mockYahooTimeserver(func(symbol string) map[string][]tsEntry {
+		return map[string][]tsEntry{}
+	})
 	defer server.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	client := finance.NewClientWithBaseURL(server.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{"quoteSummary": map[string]any{"result": []map[string]any{}}}
+	})
+	defer profileServer.Close()
+
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "MISSING.TO", slog.Default())
 
 	if scores.Financials != 0 {
@@ -172,12 +235,17 @@ func TestAnalyze_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	client := finance.NewClientWithBaseURL(server.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{"quoteSummary": map[string]any{"result": []map[string]any{}}}
+	})
+	defer profileServer.Close()
+
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "ERR.TO", slog.Default())
 
 	if scores.Financials != 0 {
@@ -186,15 +254,15 @@ func TestAnalyze_APIError(t *testing.T) {
 }
 
 func TestAnalyze_Deterministic(t *testing.T) {
-	server := newMockFMPServer(t)
-	defer server.Close()
+	financeServer, profileServer := newMockFinanceAndProfileServers(t)
+	defer financeServer.Close()
+	defer profileServer.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	client := finance.NewClientWithBaseURL(financeServer.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	s1 := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 	s2 := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 
@@ -204,31 +272,30 @@ func TestAnalyze_Deterministic(t *testing.T) {
 }
 
 func TestAnalyze_ScoreBounds(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]finance.IncomeStatement{
-				{Symbol: "EXTREME.TO", Revenue: 1e12, NetIncome: 500e9, GrossProfit: 800e9},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]finance.BalanceSheet{
-				{Symbol: "EXTREME.TO", TotalAssets: 1e12, TotalCurrentAssets: 500e9,
-					TotalCurrentLiabilities: 1e9, TotalDebt: 0, TotalStockholdersEquity: 1e12},
-			})
-		default:
-			w.Write([]byte("[]"))
+	server := mockYahooTimeserver(func(symbol string) map[string][]tsEntry {
+		return map[string][]tsEntry{
+			"annualTotalRevenue":       {tsEntryVal("2024-12-31", 1e12)},
+			"annualGrossProfit":        {tsEntryVal("2024-12-31", 800e9)},
+			"annualNetIncome":          {tsEntryVal("2024-12-31", 500e9)},
+			"annualTotalAssets":        {tsEntryVal("2024-12-31", 1e12)},
+			"annualCurrentAssets":      {tsEntryVal("2024-12-31", 500e9)},
+			"annualCurrentLiabilities": {tsEntryVal("2024-12-31", 1e9)},
+			"annualStockholdersEquity": {tsEntryVal("2024-12-31", 1e12)},
 		}
-	}))
+	})
 	defer server.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	client := finance.NewClientWithBaseURL(server.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{"quoteSummary": map[string]any{"result": []map[string]any{}}}
+	})
+	defer profileServer.Close()
+
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "EXTREME.TO", slog.Default())
 
 	if scores.Financials < -1 || scores.Financials > 1 {
@@ -237,37 +304,35 @@ func TestAnalyze_ScoreBounds(t *testing.T) {
 }
 
 func BenchmarkAnalyze(b *testing.B) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]finance.IncomeStatement{
-				{Symbol: "BENCH.TO", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]finance.BalanceSheet{
-				{Symbol: "BENCH.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
-					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9},
-			})
-		default:
-			w.Write([]byte("[]"))
+	server := mockYahooTimeserver(func(symbol string) map[string][]tsEntry {
+		return map[string][]tsEntry{
+			"annualTotalRevenue":       {tsEntryVal("2024-12-31", 1e9)},
+			"annualGrossProfit":        {tsEntryVal("2024-12-31", 400e9)},
+			"annualNetIncome":          {tsEntryVal("2024-12-31", 100e6)},
+			"annualTotalAssets":        {tsEntryVal("2024-12-31", 2e9)},
+			"annualCurrentAssets":      {tsEntryVal("2024-12-31", 1e9)},
+			"annualCurrentLiabilities": {tsEntryVal("2024-12-31", 500e6)},
+			"annualStockholdersEquity": {tsEntryVal("2024-12-31", 1.5e9)},
 		}
-	}))
+	})
 	defer server.Close()
 
-	client := finance.NewClient(server.URL, "test-key")
+	profileServer := mockProfileServer(func(symbol string) map[string]any {
+		return map[string]any{"quoteSummary": map[string]any{"result": []map[string]any{}}}
+	})
+	defer profileServer.Close()
+
+	client := finance.NewClientWithBaseURL(server.URL)
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
-	typeSentEv := newTypeSentEvForTest(server.URL)
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
+	typeSentEv := newTypeSentEvForTest(profileServer.URL)
 	log := slog.Default()
 	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Analyze(ctx, client, sentEv, leadEv, typeSentEv, "BENCH.TO", log)
+		Analyze(ctx, client, sentEv, leadEv, typeSentEv, fmt.Sprintf("BENCH%d.TO", i), log)
 	}
 }
 
@@ -278,4 +343,13 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+type mockExecutiveClient struct {
+	executives []leadership.Executive
+	err        error
+}
+
+func (m *mockExecutiveClient) GetExecutives(_ context.Context, _ string) ([]leadership.Executive, error) {
+	return m.executives, m.err
 }

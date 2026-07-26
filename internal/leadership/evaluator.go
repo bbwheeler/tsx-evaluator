@@ -3,20 +3,23 @@ package leadership
 import (
 	"context"
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 )
 
+type ExecutiveClient interface {
+	GetExecutives(ctx context.Context, symbol string) ([]Executive, error)
+}
+
 // Evaluator scores a company's leadership quality using executive data.
 type Evaluator struct {
-	fmpClient *FMPClient
-	log       *slog.Logger
+	client ExecutiveClient
+	log    *slog.Logger
 }
 
 // NewEvaluator creates a leadership evaluator.
-func NewEvaluator(fmpClient *FMPClient, log *slog.Logger) *Evaluator {
-	return &Evaluator{fmpClient: fmpClient, log: log}
+func NewEvaluator(client ExecutiveClient, log *slog.Logger) *Evaluator {
+	return &Evaluator{client: client, log: log}
 }
 
 // Evaluate fetches executive data for a symbol and returns a score in [-1, 1].
@@ -51,7 +54,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 }
 
 func (e *Evaluator) fetchLeadershipData(ctx context.Context, symbol string) (*LeadershipData, error) {
-	executives, err := e.fmpClient.GetExecutives(ctx, symbol)
+	executives, err := e.client.GetExecutives(ctx, symbol)
 	if err != nil {
 		return nil, err
 	}
@@ -65,85 +68,58 @@ func (e *Evaluator) fetchLeadershipData(ctx context.Context, symbol string) (*Le
 	}
 
 	currentYear := time.Now().Year()
-	var tenureSum float64
-	var tenureCount int
 
 	for i := range executives {
 		exec := &executives[i]
 
-		// Identify CEO
 		titleLower := strings.ToLower(exec.Title)
 		if strings.Contains(titleLower, "chief executive") || strings.Contains(titleLower, "ceo") {
 			data.CEO = exec
 		}
-
-		// Identify CFO
 		if strings.Contains(titleLower, "chief financial") || strings.Contains(titleLower, "cfo") {
 			data.CFO = exec
 		}
 
-		if exec.Since != "" {
-			sinceYear, err := strconv.Atoi(exec.Since)
-			if err == nil && sinceYear > 0 && sinceYear <= currentYear {
-				tenure := float64(currentYear - sinceYear)
-				tenureSum += tenure
-				tenureCount++
-			}
+		if exec.YearOfBirth > 0 && exec.Age == 0 {
+			exec.Age = currentYear - exec.YearOfBirth
 		}
-	}
-
-	if tenureCount > 0 {
-		data.AvgTenure = tenureSum / float64(tenureCount)
 	}
 
 	return data, nil
 }
 
 // calculateTenureScore evaluates the average tenure of executives.
-// Returns a score in [-1, 1].
+// Returns 0 when tenure data is unavailable (e.g. from free data sources).
 func (e *Evaluator) calculateTenureScore(data *LeadershipData) float64 {
 	if data.AvgTenure <= 0 {
 		return 0
 	}
 
-	// Scoring thresholds:
-	// < 2 years: -0.5 to -1.0 (new team, risky)
-	// 2-5 years: 0.0 to 0.5 (established)
-	// 5+ years: 0.5 to 1.0 (stable, experienced)
 	switch {
 	case data.AvgTenure < 2:
-		// Linear from -1.0 (at 0 years) to -0.5 (at 2 years)
 		return -1.0 + 0.5*(data.AvgTenure/2.0)
 	case data.AvgTenure < 5:
-		// Linear from 0.0 (at 2 years) to 0.5 (at 5 years)
 		return 0.5 * ((data.AvgTenure - 2.0) / 3.0)
 	default:
-		// Linear from 0.5 (at 5 years) to 1.0 (at 10+ years)
 		score := 0.5 + 0.5*((data.AvgTenure-5.0)/5.0)
 		return clamp(score, 0.5, 1.0)
 	}
 }
 
-// calculateStabilityScore evaluates CEO and CFO tenure.
-// Returns a score in [-1, 1].
+// calculateStabilityScore evaluates CEO and CFO career stage.
+// Returns 0 when age data is unavailable.
 func (e *Evaluator) calculateStabilityScore(data *LeadershipData) float64 {
 	currentYear := time.Now().Year()
 	var scores []float64
 
-	if data.CEO != nil && data.CEO.Since != "" {
-		sinceYear, err := strconv.Atoi(data.CEO.Since)
-		if err == nil && sinceYear > 0 && sinceYear <= currentYear {
-			ceoTenure := float64(currentYear - sinceYear)
-			scores = append(scores, e.stabilityFromTenure(ceoTenure))
-		}
+	if data.CEO != nil && data.CEO.YearOfBirth > 0 {
+		ceoAge := float64(currentYear - data.CEO.YearOfBirth)
+		scores = append(scores, stabilityFromAge(ceoAge))
 	}
 
-	if data.CFO != nil && data.CFO.Since != "" {
-		sinceYear, err := strconv.Atoi(data.CFO.Since)
-		if err == nil && sinceYear > 0 && sinceYear <= currentYear {
-			cfoTenure := float64(currentYear - sinceYear)
-			scores = append(scores, e.stabilityFromTenure(cfoTenure))
-		}
+	if data.CFO != nil && data.CFO.YearOfBirth > 0 {
+		cfoAge := float64(currentYear - data.CFO.YearOfBirth)
+		scores = append(scores, stabilityFromAge(cfoAge))
 	}
 
 	if len(scores) == 0 {
@@ -157,25 +133,20 @@ func (e *Evaluator) calculateStabilityScore(data *LeadershipData) float64 {
 	return total / float64(len(scores))
 }
 
-// stabilityFromTenure converts tenure years to a stability score.
-// < 1 year: -1.0 (very new)
-// 1-3 years: -0.5 to 0.0
-// 3-7 years: 0.0 to 0.5
-// 7+ years: 0.5 to 1.0
-func (e *Evaluator) stabilityFromTenure(tenure float64) float64 {
+// stabilityFromAge converts executive age to a stability score.
+// Mid-career (45-60) scores highest; very young or near-retirement scores lower.
+func stabilityFromAge(age float64) float64 {
 	switch {
-	case tenure < 1:
-		return -1.0
-	case tenure < 3:
-		// Linear from -0.5 (at 1 year) to 0.0 (at 3 years)
-		return -0.5 + 0.5*((tenure-1.0)/2.0)
-	case tenure < 7:
-		// Linear from 0.0 (at 3 years) to 0.5 (at 7 years)
-		return 0.5 * ((tenure - 3.0) / 4.0)
+	case age < 35:
+		return -0.5
+	case age < 45:
+		return -0.5 + 0.5*((age-35)/10.0)
+	case age < 60:
+		return 0.5
+	case age < 70:
+		return 0.5 - 0.5*((age-60)/10.0)
 	default:
-		// Linear from 0.5 (at 7 years) to 1.0 (at 12+ years)
-		score := 0.5 + 0.5*((tenure-7.0)/5.0)
-		return clamp(score, 0.5, 1.0)
+		return -0.5
 	}
 }
 
