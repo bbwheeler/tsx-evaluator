@@ -58,7 +58,7 @@ func (c *Client) fetchJSON(ctx context.Context, url string, out any) error {
 // GetIncomeStatement returns income statements for the given symbol.
 // limit=2 gives current + prior year (needed for Piotroski).
 func (c *Client) GetIncomeStatement(ctx context.Context, symbol string, limit int) ([]IncomeStatement, error) {
-	url := fmt.Sprintf("%s/stable/income-statement?symbol=%s&limit=%d&apikey=%s",
+	url := fmt.Sprintf("%s/v3/income-statement/%s?limit=%d&apikey=%s",
 		c.baseURL, symbol, limit, c.apiKey)
 
 	var result []IncomeStatement
@@ -70,7 +70,7 @@ func (c *Client) GetIncomeStatement(ctx context.Context, symbol string, limit in
 
 // GetBalanceSheet returns balance sheet statements for the given symbol.
 func (c *Client) GetBalanceSheet(ctx context.Context, symbol string, limit int) ([]BalanceSheet, error) {
-	url := fmt.Sprintf("%s/stable/balance-sheet-statement?symbol=%s&limit=%d&apikey=%s",
+	url := fmt.Sprintf("%s/v3/balance-sheet-statement/%s?limit=%d&apikey=%s",
 		c.baseURL, symbol, limit, c.apiKey)
 
 	var result []BalanceSheet
@@ -82,7 +82,7 @@ func (c *Client) GetBalanceSheet(ctx context.Context, symbol string, limit int) 
 
 // GetCashFlowStatement returns cash flow statements for the given symbol.
 func (c *Client) GetCashFlowStatement(ctx context.Context, symbol string, limit int) ([]CashFlowStatement, error) {
-	url := fmt.Sprintf("%s/stable/cash-flow-statement?symbol=%s&limit=%d&apikey=%s",
+	url := fmt.Sprintf("%s/v3/cash-flow-statement/%s?limit=%d&apikey=%s",
 		c.baseURL, symbol, limit, c.apiKey)
 
 	var result []CashFlowStatement

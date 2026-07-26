@@ -1,15 +1,11 @@
 package leadership
 
-// Executive represents a company executive from the FMP API.
+// Executive represents a company executive.
 type Executive struct {
-	Name          string  `json:"name"`
-	Title         string  `json:"title"`
-	Age           int     `json:"age"`
-	Gender        string  `json:"gender"`
-	YearOfBirth   int     `json:"yearOfBirth"`
-	Compensation  float64 `json:"compensation"`
-	Currency      string  `json:"currency"`
-	Since         string  `json:"since"`
+	Name        string
+	Title       string
+	Age         int
+	YearOfBirth int
 }
 
 // LeadershipData holds the data needed to calculate a leadership score.

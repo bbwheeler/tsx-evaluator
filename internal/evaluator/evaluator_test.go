@@ -359,8 +359,7 @@ func TestNew(t *testing.T) {
 	finCli := finance.NewClient("http://localhost", "key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, log)
-	leadFmpCli := leadership.NewFMPClient("http://localhost", "key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, log)
+	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), log)
 	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost", "key")
 	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, log)
 
@@ -381,8 +380,7 @@ func newTestEvaluator(t *testing.T) *Evaluator {
 	finCli := finance.NewClient("http://localhost", "key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient("http://localhost", "key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), slog.Default())
 	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost", "key")
 	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, slog.Default())
 	return New(&config.Config{}, &mockEvaluatorStore{

@@ -61,8 +61,7 @@ func run(log *slog.Logger) error {
 	sentEv := sentiment.NewEvaluator(llmClient, log)
 
 	// Leadership analysis
-	leadFmpCli := leadership.NewFMPClient(cfg.FMPBaseURL, cfg.FMPAPIKey)
-	leadEv := leadership.NewEvaluator(leadFmpCli, log)
+	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), log)
 
 	// Type sentiment analysis (sector/industry outlook)
 	typeSentProfileCli := typesentiment.NewProfileClient(cfg.FMPBaseURL, cfg.FMPAPIKey)

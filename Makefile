@@ -42,4 +42,3 @@ quadlet-build:
 quadlet-enable: quadlet-build
 	systemctl --user daemon-reload
 	systemctl --user start tsx-evaluator-build.service
-	systemctl --user enable --now tsx-evaluator.service

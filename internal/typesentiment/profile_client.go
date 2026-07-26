@@ -30,7 +30,7 @@ func NewProfileClient(baseURL, apiKey string) *ProfileClient {
 
 // GetProfile returns the company profile for a symbol, including sector and industry.
 func (c *ProfileClient) GetProfile(ctx context.Context, symbol string) (*CompanyProfile, error) {
-	url := fmt.Sprintf("%s/stable/profile?symbol=%s&apikey=%s",
+	url := fmt.Sprintf("%s/v3/profile/%s?apikey=%s",
 		c.baseURL, symbol, c.apiKey)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

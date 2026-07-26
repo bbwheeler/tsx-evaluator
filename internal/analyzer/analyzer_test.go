@@ -53,8 +53,7 @@ func TestAnalyze_ReturnsRealScore(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 
@@ -94,8 +93,7 @@ func TestAnalyze_TypeSentimentReturnsScore(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TECH.TO", slog.Default())
 
@@ -121,11 +119,6 @@ func TestAnalyze_LeadershipReturnsScore(t *testing.T) {
 				{Symbol: "LEAD.TO", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
 					TotalCurrentLiabilities: 500e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6},
 			})
-		case contains(path, "key-executives"):
-			json.NewEncoder(w).Encode([]leadership.Executive{
-				{Name: "Jane Doe", Title: "Chief Executive Officer", Since: "2015", Age: 55},
-				{Name: "John Smith", Title: "Chief Financial Officer", Since: "2018", Age: 48},
-			})
 		default:
 			w.Write([]byte("[]"))
 		}
@@ -135,8 +128,12 @@ func TestAnalyze_LeadershipReturnsScore(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{
+		executives: []leadership.Executive{
+			{Name: "Jane Doe", Title: "Chief Executive Officer", YearOfBirth: 1970},
+			{Name: "John Smith", Title: "Chief Financial Officer", YearOfBirth: 1977},
+		},
+	}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "LEAD.TO", slog.Default())
 
@@ -156,8 +153,7 @@ func TestAnalyze_NoData(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "MISSING.TO", slog.Default())
 
@@ -175,8 +171,7 @@ func TestAnalyze_APIError(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "ERR.TO", slog.Default())
 
@@ -192,8 +187,7 @@ func TestAnalyze_Deterministic(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	s1 := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
 	s2 := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "TEST.TO", slog.Default())
@@ -226,8 +220,7 @@ func TestAnalyze_ScoreBounds(t *testing.T) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	scores := Analyze(context.Background(), client, sentEv, leadEv, typeSentEv, "EXTREME.TO", slog.Default())
 
@@ -259,8 +252,7 @@ func BenchmarkAnalyze(b *testing.B) {
 	client := finance.NewClient(server.URL, "test-key")
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient(server.URL, "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(&mockExecutiveClient{}, slog.Default())
 	typeSentEv := newTypeSentEvForTest(server.URL)
 	log := slog.Default()
 	ctx := context.Background()
@@ -278,4 +270,13 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+type mockExecutiveClient struct {
+	executives []leadership.Executive
+	err        error
+}
+
+func (m *mockExecutiveClient) GetExecutives(_ context.Context, _ string) ([]leadership.Executive, error) {
+	return m.executives, m.err
 }

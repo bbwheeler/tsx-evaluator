@@ -47,8 +47,7 @@ func (m *mockStore) UpsertScores(ctx context.Context, s *db.ScoreSet) error {
 func newTestServer(store Store) *Server {
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
-	leadFmpCli := leadership.NewFMPClient("http://localhost:0", "test-key")
-	leadEv := leadership.NewEvaluator(leadFmpCli, slog.Default())
+	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), slog.Default())
 	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost:0", "test-key")
 	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, slog.Default())
 	return New(store, testFinanceClient(), sentEv, leadEv, typeSentEv, slog.Default())
