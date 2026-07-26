@@ -16,11 +16,22 @@ rm -rf "$INSTALL_DIR/bin" "$INSTALL_DIR/gen"
 
 # Copy tracker source for the Containerfile build (go.mod replace directive).
 # Only bin/ is stripped; gen/ is needed for the evaluator's protobuf imports.
-if [[ -d /opt/tsx-tracker ]]; then
-  rm -rf "$HOME/tsx-tracker"
-  cp -r /opt/tsx-tracker "$HOME/tsx-tracker"
-  rm -rf "$HOME/tsx-tracker/bin"
+TRACKER_SRC="${TSX_TRACKER_DIR:-}"
+if [[ -z "$TRACKER_SRC" && -d /opt/tsx-tracker ]]; then
+  TRACKER_SRC="/opt/tsx-tracker"
 fi
+if [[ -z "$TRACKER_SRC" && -d "$PROJECT_DIR/../tsx-tracker" ]]; then
+  TRACKER_SRC="$PROJECT_DIR/../tsx-tracker"
+fi
+if [[ -z "$TRACKER_SRC" ]]; then
+  echo "ERROR: tsx-tracker source not found." >&2
+  echo "  Set TSX_TRACKER_DIR=/path/to/tsx-tracker or place it at /opt/tsx-tracker" >&2
+  exit 1
+fi
+echo "==> Copying tracker from $TRACKER_SRC"
+rm -rf "$HOME/tsx-tracker"
+cp -r "$TRACKER_SRC" "$HOME/tsx-tracker"
+rm -rf "$HOME/tsx-tracker/bin"
 
 echo "==> Installing Quadlet units to $QUADLET_DIR"
 mkdir -p "$QUADLET_DIR"
