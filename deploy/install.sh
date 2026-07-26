@@ -15,10 +15,11 @@ cp -r "$PROJECT_DIR"/Containerfile "$PROJECT_DIR"/go.mod "$PROJECT_DIR"/go.sum \
 rm -rf "$INSTALL_DIR/bin" "$INSTALL_DIR/gen"
 
 # Copy tracker source for the Containerfile build (go.mod replace directive).
+# Only bin/ is stripped; gen/ is needed for the evaluator's protobuf imports.
 if [[ -d /opt/tsx-tracker ]]; then
-  rm -f "$HOME/tsx-tracker"
+  rm -rf "$HOME/tsx-tracker"
   cp -r /opt/tsx-tracker "$HOME/tsx-tracker"
-  rm -rf "$HOME/tsx-tracker/bin" "$HOME/tsx-tracker/gen"
+  rm -rf "$HOME/tsx-tracker/bin"
 fi
 
 echo "==> Installing Quadlet units to $QUADLET_DIR"

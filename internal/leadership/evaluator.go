@@ -34,12 +34,10 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 		return 0
 	}
 
-	// Calculate scores
 	tenureScore := e.calculateTenureScore(data)
 	stabilityScore := e.calculateStabilityScore(data)
 
-	// Weighted combination: 60% tenure, 40% stability
-	// (insider sentiment skipped for TSX/Canadian stocks)
+	// 60% tenure, 40% stability (insider sentiment skipped for TSX/Canadian stocks)
 	final := 0.6*tenureScore + 0.4*stabilityScore
 
 	e.log.Info("leadership analysis complete",
@@ -52,7 +50,6 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 	return clamp(final, -1, 1)
 }
 
-// fetchLeadershipData retrieves and processes executive data from FMP.
 func (e *Evaluator) fetchLeadershipData(ctx context.Context, symbol string) (*LeadershipData, error) {
 	executives, err := e.fmpClient.GetExecutives(ctx, symbol)
 	if err != nil {
@@ -67,7 +64,6 @@ func (e *Evaluator) fetchLeadershipData(ctx context.Context, symbol string) (*Le
 		Executives: executives,
 	}
 
-	// Find CEO and CFO
 	currentYear := time.Now().Year()
 	var tenureSum float64
 	var tenureCount int
@@ -86,7 +82,6 @@ func (e *Evaluator) fetchLeadershipData(ctx context.Context, symbol string) (*Le
 			data.CFO = exec
 		}
 
-		// Calculate tenure from "Since" field
 		if exec.Since != "" {
 			sinceYear, err := strconv.Atoi(exec.Since)
 			if err == nil && sinceYear > 0 && sinceYear <= currentYear {
@@ -97,7 +92,6 @@ func (e *Evaluator) fetchLeadershipData(ctx context.Context, symbol string) (*Le
 		}
 	}
 
-	// Calculate average tenure
 	if tenureCount > 0 {
 		data.AvgTenure = tenureSum / float64(tenureCount)
 	}
@@ -136,7 +130,6 @@ func (e *Evaluator) calculateStabilityScore(data *LeadershipData) float64 {
 	currentYear := time.Now().Year()
 	var scores []float64
 
-	// CEO stability
 	if data.CEO != nil && data.CEO.Since != "" {
 		sinceYear, err := strconv.Atoi(data.CEO.Since)
 		if err == nil && sinceYear > 0 && sinceYear <= currentYear {
@@ -145,7 +138,6 @@ func (e *Evaluator) calculateStabilityScore(data *LeadershipData) float64 {
 		}
 	}
 
-	// CFO stability
 	if data.CFO != nil && data.CFO.Since != "" {
 		sinceYear, err := strconv.Atoi(data.CFO.Since)
 		if err == nil && sinceYear > 0 && sinceYear <= currentYear {
@@ -158,7 +150,6 @@ func (e *Evaluator) calculateStabilityScore(data *LeadershipData) float64 {
 		return 0
 	}
 
-	// Average of CEO and CFO stability scores
 	total := 0.0
 	for _, s := range scores {
 		total += s

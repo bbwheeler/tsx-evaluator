@@ -151,7 +151,6 @@ func parseSentimentResponse(content string) (*SentimentResult, error) {
 		return nil, fmt.Errorf("parse sentiment json: %w", err)
 	}
 
-	// Clamp values to valid ranges
 	result.Score = clamp(result.Score, -1.0, 1.0)
 	result.Confidence = clamp(result.Confidence, 0.0, 1.0)
 

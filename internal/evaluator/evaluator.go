@@ -46,7 +46,6 @@ func (e *Evaluator) Run(ctx context.Context) {
 		"batch_size", e.cfg.EvalBatchSize,
 		"tracker", e.cfg.TrackerAddr)
 
-	// Run an immediate evaluation pass, then on interval.
 	e.cycle(ctx)
 
 	ticker := time.NewTicker(e.cfg.EvalInterval)
@@ -74,7 +73,6 @@ func (e *Evaluator) cycle(ctx context.Context) {
 
 	client := tsxv1.NewCompanyServiceClient(conn)
 
-	// Fetch all companies (paginate through full list).
 	symbols, err := e.fetchAllSymbols(ctx, client)
 	if err != nil {
 		e.log.Error("fetch symbols from tracker", "error", err)
@@ -85,11 +83,9 @@ func (e *Evaluator) cycle(ctx context.Context) {
 		return
 	}
 
-	// Pick random symbols to evaluate this cycle.
 	batch := min(e.cfg.EvalBatchSize, len(symbols))
 	evaluated := 0
 
-	// Get already-evaluated symbols to prioritise un-evaluated ones.
 	existing, _ := e.repo.EvaluatedSymbols(ctx)
 
 	var unevaluated []string
@@ -99,7 +95,6 @@ func (e *Evaluator) cycle(ctx context.Context) {
 		}
 	}
 
-	// Evaluate unevaluated symbols first, then re-evaluate old ones.
 	candidates := unevaluated
 	if len(candidates) < batch {
 		remaining := batch - len(candidates)
