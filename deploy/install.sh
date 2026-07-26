@@ -50,7 +50,7 @@ systemctl --user daemon-reload
 echo ""
 echo "Done. Next steps:"
 echo ""
-echo "  1. Edit $ENV_DIR/.env.podman and fill in DB_USER, DB_PASSWORD, FMP_API_KEY"
+echo "  1. Edit $ENV_DIR/.env.podman and fill in DB_USER, DB_PASSWORD"
 echo ""
 echo "  2. Build the image:"
 echo "       systemctl --user start tsx-evaluator-build.service"

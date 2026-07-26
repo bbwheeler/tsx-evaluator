@@ -356,11 +356,11 @@ func TestNew(t *testing.T) {
 			return nil
 		},
 	}
-	finCli := finance.NewClient("http://localhost", "key")
+	finCli := finance.NewClient()
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, log)
 	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), log)
-	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost", "key")
+	typeSentProfileCli := typesentiment.NewProfileClient()
 	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, log)
 
 	ev := New(cfg, store, finCli, sentEv, leadEv, typeSentEv, log)
@@ -377,11 +377,11 @@ func TestNew(t *testing.T) {
 
 func newTestEvaluator(t *testing.T) *Evaluator {
 	t.Helper()
-	finCli := finance.NewClient("http://localhost", "key")
+	finCli := finance.NewClient()
 	llmClient := sentiment.NewLLMClient("http://localhost:11434", "llama3", 60)
 	sentEv := sentiment.NewEvaluator(llmClient, slog.Default())
 	leadEv := leadership.NewEvaluator(leadership.NewYahooClient(), slog.Default())
-	typeSentProfileCli := typesentiment.NewProfileClient("http://localhost", "key")
+	typeSentProfileCli := typesentiment.NewProfileClient()
 	typeSentEv := typesentiment.NewEvaluator(typeSentProfileCli, llmClient, slog.Default())
 	return New(&config.Config{}, &mockEvaluatorStore{
 		evaluatedSymbolsFn: func(_ context.Context) (map[string]struct{}, error) {

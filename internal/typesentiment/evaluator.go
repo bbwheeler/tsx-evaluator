@@ -31,6 +31,15 @@ func NewEvaluator(
 	}
 }
 
+func NewEvaluatorForTest(profileBaseURL string, llmClient *sentiment.LLMClient, log *slog.Logger) *Evaluator {
+	return &Evaluator{
+		profileClient: NewProfileClientForTest(profileBaseURL),
+		llmClient:     llmClient,
+		googleClient:  sentiment.NewGoogleNewsClient("en-US"),
+		log:           log,
+	}
+}
+
 // Evaluate fetches the company's sector/industry and returns a sentiment score
 // for that sector in [-1, 1].
 // 1.0 = extremely bullish sector outlook, -1.0 = extremely bearish.

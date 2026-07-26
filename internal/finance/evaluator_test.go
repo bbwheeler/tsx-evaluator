@@ -9,26 +9,33 @@ import (
 	"testing"
 )
 
+func tsVal(date string, val float64) tsEntry {
+	e := tsEntry{AsOfDate: date, PeriodType: "12M"}
+	e.ReportedValue.Raw = val
+	return e
+}
+
+func makeTimeseriesResponse(entries map[string][]tsEntry) map[string]any {
+	result := map[string]any{
+		"timeseries": map[string]any{
+			"result": []any{entries},
+		},
+	}
+	return result
+}
+
 func TestClient_GetIncomeStatement(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("symbol") != "SHOP.TO" {
-			t.Errorf("expected symbol=SHOP.TO, got %q", r.URL.Query().Get("symbol"))
-		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]IncomeStatement{
-			{
-				Symbol: "SHOP.TO", Date: "2025-12-31", Period: "FY",
-				Revenue: 3.5e9, NetIncome: 200e6, GrossProfit: 1.8e9,
-			},
-			{
-				Symbol: "SHOP.TO", Date: "2024-12-31", Period: "FY",
-				Revenue: 2.8e9, NetIncome: 150e6, GrossProfit: 1.4e9,
-			},
-		})
+		json.NewEncoder(w).Encode(makeTimeseriesResponse(map[string][]tsEntry{
+			"annualTotalRevenue": {tsVal("2025-12-31", 3.5e9), tsVal("2024-12-31", 2.8e9)},
+			"annualGrossProfit":  {tsVal("2025-12-31", 1.8e9), tsVal("2024-12-31", 1.4e9)},
+			"annualNetIncome":    {tsVal("2025-12-31", 200e6), tsVal("2024-12-31", 150e6)},
+		}))
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	stmts, err := client.GetIncomeStatement(context.Background(), "SHOP.TO", 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -44,18 +51,18 @@ func TestClient_GetIncomeStatement(t *testing.T) {
 func TestClient_GetBalanceSheet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]BalanceSheet{
-			{
-				Symbol: "RY.TO", Date: "2025-10-31", Period: "FY",
-				TotalAssets: 2e12, TotalCurrentAssets: 500e9,
-				TotalLiabilities: 1.8e12, TotalCurrentLiabilities: 400e9,
-				TotalStockholdersEquity: 200e9, LongTermDebt: 100e9,
-			},
-		})
+		json.NewEncoder(w).Encode(makeTimeseriesResponse(map[string][]tsEntry{
+			"annualTotalAssets":                      {tsVal("2025-10-31", 2e12)},
+			"annualCurrentAssets":                    {tsVal("2025-10-31", 500e9)},
+			"annualTotalLiabilitiesNetMinorityInterest": {tsVal("2025-10-31", 1.8e12)},
+			"annualCurrentLiabilities":               {tsVal("2025-10-31", 400e9)},
+			"annualStockholdersEquity":               {tsVal("2025-10-31", 200e9)},
+			"annualLongTermDebt":                     {tsVal("2025-10-31", 100e9)},
+		}))
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	sheets, err := client.GetBalanceSheet(context.Background(), "RY.TO", 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -71,13 +78,13 @@ func TestClient_GetBalanceSheet(t *testing.T) {
 func TestClient_GetCashFlowStatement(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]CashFlowStatement{
-			{Symbol: "TD.TO", Date: "2025-10-31", Period: "FY", OperatingCashFlow: 50e9},
-		})
+		json.NewEncoder(w).Encode(makeTimeseriesResponse(map[string][]tsEntry{
+			"annualOperatingCashFlow": {tsVal("2025-10-31", 50e9)},
+		}))
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	sheets, err := client.GetCashFlowStatement(context.Background(), "TD.TO", 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -90,14 +97,17 @@ func TestClient_GetCashFlowStatement(t *testing.T) {
 	}
 }
 
-func TestClient_NotFound(t *testing.T) {
+func TestClient_EmptyTimeseries(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"timeseries": map[string]any{"result": []map[string]any{}},
+		})
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
-	stmts, err := client.GetIncomeStatement(context.Background(), "MISSING", 1)
+	client := NewClientWithBaseURL(server.URL)
+	stmts, err := client.GetIncomeStatement(context.Background(), "NOPE.TO", 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -113,77 +123,32 @@ func TestClient_ServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	_, err := client.GetIncomeStatement(context.Background(), "SHOP.TO", 1)
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
 }
 
-func TestClient_EmptyArray(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	stmts, err := client.GetIncomeStatement(context.Background(), "NOPE.TO", 1)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(stmts) != 0 {
-		t.Errorf("expected empty result, got %d", len(stmts))
-	}
-}
-
-func TestClient_IncludesAPIKey(t *testing.T) {
-	var capturedKey string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedKey = r.URL.Query().Get("apikey")
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "my-secret-key")
-	_, _ = client.GetIncomeStatement(context.Background(), "TEST", 1)
-
-	if capturedKey != "my-secret-key" {
-		t.Errorf("API key: got %q, want %q", capturedKey, "my-secret-key")
-	}
-}
-
 func TestEvaluator_Evaluate(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]IncomeStatement{
-				{Symbol: "TEST", Revenue: 1e9, NetIncome: 100e6, GrossProfit: 400e6},
-				{Symbol: "TEST", Revenue: 800e6, NetIncome: 80e6, GrossProfit: 300e6},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]BalanceSheet{
-				{
-					Symbol: "TEST", TotalAssets: 2e9, TotalCurrentAssets: 1e9,
-					TotalCurrentLiabilities: 500e6, TotalDebt: 200e6,
-					LongTermDebt: 100e6, TotalStockholdersEquity: 1.5e9, CommonStock: 10e6,
-				},
-				{
-					Symbol: "TEST", TotalAssets: 1.8e9, TotalCurrentAssets: 900e6,
-					TotalCurrentLiabilities: 550e6, TotalDebt: 300e6,
-					LongTermDebt: 200e6, TotalStockholdersEquity: 1.2e9, CommonStock: 10e6,
-				},
-			})
-		default:
-			w.Write([]byte("[]"))
-		}
+		json.NewEncoder(w).Encode(makeTimeseriesResponse(map[string][]tsEntry{
+			"annualTotalRevenue":    {tsVal("2024-12-31", 1e9), tsVal("2023-12-31", 800e6)},
+			"annualGrossProfit":     {tsVal("2024-12-31", 400e6), tsVal("2023-12-31", 300e6)},
+			"annualNetIncome":       {tsVal("2024-12-31", 100e6), tsVal("2023-12-31", 80e6)},
+			"annualTotalAssets":     {tsVal("2024-12-31", 2e9), tsVal("2023-12-31", 1.8e9)},
+			"annualCurrentAssets":   {tsVal("2024-12-31", 1e9), tsVal("2023-12-31", 900e6)},
+			"annualCurrentLiabilities": {tsVal("2024-12-31", 500e6), tsVal("2023-12-31", 550e6)},
+			"annualStockholdersEquity": {tsVal("2024-12-31", 1.5e9), tsVal("2023-12-31", 1.2e9)},
+			"annualCommonStock":     {tsVal("2024-12-31", 10e6), tsVal("2023-12-31", 10e6)},
+			"annualTotalDebt":       {tsVal("2024-12-31", 200e6)},
+			"annualLongTermDebt":    {tsVal("2024-12-31", 100e6), tsVal("2023-12-31", 200e6)},
+		}))
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	ev := NewEvaluator(client, slog.Default())
 	score := ev.Evaluate(context.Background(), "TEST")
 
@@ -196,11 +161,13 @@ func TestEvaluator_Evaluate(t *testing.T) {
 func TestEvaluator_NoData(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
+		json.NewEncoder(w).Encode(map[string]any{
+			"timeseries": map[string]any{"result": []map[string]any{}},
+		})
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	ev := NewEvaluator(client, slog.Default())
 	score := ev.Evaluate(context.Background(), "MISSING")
 
@@ -215,7 +182,7 @@ func TestEvaluator_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	ev := NewEvaluator(client, slog.Default())
 	score := ev.Evaluate(context.Background(), "ERR")
 
@@ -225,27 +192,21 @@ func TestEvaluator_APIError(t *testing.T) {
 }
 
 func TestEvaluator_ScoreBounds(t *testing.T) {
-	// Test with extreme values that should still clamp to [-1, 1]
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		path := r.URL.Path
-		switch {
-		case contains(path, "income-statement"):
-			json.NewEncoder(w).Encode([]IncomeStatement{
-				{Symbol: "EXTREME", Revenue: 1e12, NetIncome: 500e9, GrossProfit: 800e9},
-			})
-		case contains(path, "balance-sheet-statement"):
-			json.NewEncoder(w).Encode([]BalanceSheet{
-				{Symbol: "EXTREME", TotalAssets: 1e12, TotalCurrentAssets: 500e9,
-					TotalCurrentLiabilities: 1e9, TotalDebt: 0, TotalStockholdersEquity: 1e12},
-			})
-		default:
-			w.Write([]byte("[]"))
-		}
+		json.NewEncoder(w).Encode(makeTimeseriesResponse(map[string][]tsEntry{
+			"annualTotalRevenue":       {tsVal("2024-12-31", 1e12)},
+			"annualGrossProfit":        {tsVal("2024-12-31", 800e9)},
+			"annualNetIncome":          {tsVal("2024-12-31", 500e9)},
+			"annualTotalAssets":        {tsVal("2024-12-31", 1e12)},
+			"annualCurrentAssets":      {tsVal("2024-12-31", 500e9)},
+			"annualCurrentLiabilities": {tsVal("2024-12-31", 1e9)},
+			"annualStockholdersEquity": {tsVal("2024-12-31", 1e12)},
+		}))
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-key")
+	client := NewClientWithBaseURL(server.URL)
 	ev := NewEvaluator(client, slog.Default())
 	score := ev.Evaluate(context.Background(), "EXTREME")
 
@@ -253,17 +214,4 @@ func TestEvaluator_ScoreBounds(t *testing.T) {
 		t.Errorf("score out of bounds: %v", score)
 	}
 	t.Logf("extreme score: %.3f", score)
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsStr(s, sub))
-}
-
-func containsStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
