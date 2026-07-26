@@ -1,6 +1,6 @@
 # TSX Evaluator
 
-A Go microservice that evaluates financial health and sentiment of TSX-listed stocks using the Piotroski F-Score, custom financial metrics, and LLM-powered sentiment analysis. Exposes results via gRPC.
+A Go microservice that evaluates TSX-listed stocks across four dimensions—financial health, sentiment, leadership quality, and sector outlook—using the Piotroski F-Score, LLM-powered news analysis, and executive tenure metrics. Results are exposed via gRPC.
 
 ## Prerequisites
 
@@ -142,7 +142,7 @@ The `financials` score is composed of:
 
 The `sentiment` score is computed by:
 
-1. Fetching news headlines from Yahoo Finance RSS, Google News RSS, and Reddit posts
+1. Fetching news headlines from Yahoo Finance RSS and Google News RSS
 2. Sending the collected text to an LLM (Ollama) for analysis
 3. Parsing the LLM's response to extract a score between -1.0 (extremely negative) and 1.0 (extremely positive)
 
@@ -187,7 +187,6 @@ The sentiment scoring system uses free data sources and a local LLM:
 **Data Sources:**
 - Yahoo Finance RSS: `https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}`
 - Google News RSS: `https://news.google.com/rss/search?q={symbol}+stock`
-- Reddit JSON: Posts from r/wallstreetbets, r/stocks, r/investing
 
 **LLM Integration:**
 - Compatible with Ollama API (`/api/chat` endpoint)

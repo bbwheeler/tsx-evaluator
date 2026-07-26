@@ -18,17 +18,10 @@ import (
 //   - Leadership: Executive tenure and stability score
 //   - TypeSentiment: Sector/industry outlook sentiment score
 func Analyze(ctx context.Context, financeClient *finance.Client, sentimentEv *sentiment.Evaluator, leadershipEv *leadership.Evaluator, typeSentEv *typesentiment.Evaluator, symbol string, log *slog.Logger) *db.ScoreSet {
-	// Financial health score
 	finEv := finance.NewEvaluator(financeClient, log)
 	financialScore := finEv.Evaluate(ctx, symbol)
-
-	// Sentiment score
 	sentimentScore := sentimentEv.Evaluate(ctx, symbol)
-
-	// Leadership score
 	leadershipScore := leadershipEv.Evaluate(ctx, symbol)
-
-	// Type sentiment score
 	typeSentimentScore := typeSentEv.Evaluate(ctx, symbol)
 
 	return &db.ScoreSet{

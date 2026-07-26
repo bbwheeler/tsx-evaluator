@@ -18,7 +18,6 @@ type Evaluator struct {
 	log           *slog.Logger
 }
 
-// NewEvaluator creates a type sentiment evaluator.
 func NewEvaluator(
 	profileClient *ProfileClient,
 	llmClient *sentiment.LLMClient,
@@ -58,10 +57,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 		"sector", sector,
 		"industry", industry)
 
-	// Build search queries for sector-level news
 	queries := e.buildSearchQueries(sector, industry)
-
-	// Fetch articles for all queries concurrently
 	articles := e.fetchSectorArticles(ctx, queries)
 
 	if len(articles) == 0 {
@@ -78,10 +74,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 		"industry", industry,
 		"article_count", len(articles))
 
-	// Format articles for LLM
 	articlesText := sentiment.FormatArticlesForLLM(articles)
-
-	// Analyze sector sentiment with LLM
 	score, reasoning, confidence := e.analyzeSectorSentiment(ctx, sector, industry, articlesText)
 
 	e.log.Info("type sentiment analysis complete",
@@ -95,7 +88,6 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 	return score
 }
 
-// buildSearchQueries creates search queries for sector-level news.
 func (e *Evaluator) buildSearchQueries(sector, industry string) []string {
 	var queries []string
 
@@ -120,7 +112,6 @@ func (e *Evaluator) buildSearchQueries(sector, industry string) []string {
 	return queries
 }
 
-// fetchSectorArticles fetches news for sector/industry queries concurrently.
 func (e *Evaluator) fetchSectorArticles(ctx context.Context, queries []string) []sentiment.Article {
 	type result struct {
 		articles []sentiment.Article
@@ -150,7 +141,6 @@ func (e *Evaluator) fetchSectorArticles(ctx context.Context, queries []string) [
 	return all
 }
 
-// analyzeSectorSentiment sends sector articles to the LLM and returns a score.
 func (e *Evaluator) analyzeSectorSentiment(ctx context.Context, sector, industry, articlesText string) (float64, string, float64) {
 	typeName := sector
 	if industry != "" && industry != sector {

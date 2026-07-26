@@ -22,7 +22,6 @@ func NewYahooRSSClient() *YahooRSSClient {
 	}
 }
 
-// rssFeed represents the RSS XML structure.
 type rssFeed struct {
 	Channel rssChannel `xml:"channel"`
 }

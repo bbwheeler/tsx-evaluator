@@ -31,7 +31,6 @@ func NewEvaluator(
 // 1.0 = extremely positive sentiment, -1.0 = extremely negative sentiment.
 // Returns 0.0 (neutral) when data is insufficient or analysis fails.
 func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
-	// Fetch articles from all sources concurrently
 	articles := e.fetchAllArticles(ctx, symbol)
 
 	if len(articles) == 0 {
@@ -43,10 +42,8 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 		"symbol", symbol,
 		"count", len(articles))
 
-	// Format articles for LLM
 	articlesText := FormatArticlesForLLM(articles)
 
-	// Send to LLM for analysis
 	result, err := e.llmClient.AnalyzeSentiment(ctx, symbol, articlesText)
 	if err != nil {
 		e.log.Error("llm sentiment analysis failed",
@@ -64,7 +61,6 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 	return result.Score
 }
 
-// fetchAllArticles fetches articles from all sources concurrently.
 func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Article {
 	type sourceResult struct {
 		articles []Article
@@ -74,7 +70,6 @@ func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Artic
 	var wg sync.WaitGroup
 	results := make(chan sourceResult, 2)
 
-	// Yahoo Finance RSS
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -82,7 +77,6 @@ func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Artic
 		results <- sourceResult{articles, err}
 	}()
 
-	// Google News RSS
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -90,13 +84,11 @@ func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Artic
 		results <- sourceResult{articles, err}
 	}()
 
-	// Wait for all goroutines to finish
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Collect all articles
 	var allArticles []Article
 	for result := range results {
 		if result.err != nil {

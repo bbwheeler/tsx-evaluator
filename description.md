@@ -2,7 +2,7 @@
 
 ## Overall Purpose
 
-The TSX Evaluator is a Go microservice that performs automated financial health and sentiment analysis of stocks listed on the Toronto Stock Exchange (TSX). It evaluates stocks using quantitative metrics—primarily the Piotroski F-Score, custom financial health indicators, and LLM-powered sentiment analysis—and exposes the results through a gRPC API for downstream consumers.
+The TSX Evaluator is a Go microservice that evaluates stocks listed on the Toronto Stock Exchange (TSX) across four dimensions: financial health, sentiment, leadership quality, and sector/industry outlook. It combines quantitative metrics (Piotroski F-Score, custom health indicators, executive tenure analysis) with LLM-powered news sentiment analysis and exposes results through a gRPC API.
 
 ---
 
@@ -23,12 +23,12 @@ The evaluation interval and batch size are configurable via environment variable
 
 Each stock receives four score components (all in the range `[-1, 1]`):
 
-| Metric | Status | Description |
+| Metric | Description |
 |---|---|---|
-| **Financials** | Implemented | Composite score from Piotroski F-Score (60%) and custom health metrics (40%) |
-| **Sentiment** | Implemented | LLM-analyzed sentiment from news articles, RSS feeds, and social media |
-| **Leadership** | Implemented | Leadership quality score based on executive tenure (60%) and CEO/CFO stability (40%) |
-| **TypeSentiment** | Implemented | Sector/industry outlook sentiment based on the company's business classification |
+| **Financials** | Composite score from Piotroski F-Score (60%) and custom health metrics (40%) |
+| **Sentiment** | LLM-analyzed sentiment from news articles and RSS feeds |
+| **Leadership** | Leadership quality score based on executive tenure (60%) and CEO/CFO stability (40%) |
+| **TypeSentiment** | Sector/industry outlook sentiment based on the company's business classification |
 
 #### Piotroski F-Score Calculation
 
@@ -125,7 +125,6 @@ The sentiment scoring system collects news and social media data from multiple f
 |---|---|---|---|
 | **Yahoo Finance RSS** | RSS Feed | None | Company-specific news headlines |
 | **Google News RSS** | RSS Feed | None | Aggregated news from multiple sources |
-| **Reddit JSON** | JSON API | ~60 req/min | Posts from r/wallstreetbets, r/stocks, r/investing |
 
 All data sources are **free** and require no API keys.
 
