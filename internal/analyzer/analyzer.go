@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/example/tsx-evaluator/internal/db"
 	"github.com/example/tsx-evaluator/internal/finance"
@@ -18,11 +19,13 @@ import (
 //   - Leadership: Executive tenure and stability score
 //   - TypeSentiment: Sector/industry outlook sentiment score
 func Analyze(ctx context.Context, financeClient *finance.Client, sentimentEv *sentiment.Evaluator, leadershipEv *leadership.Evaluator, typeSentEv *typesentiment.Evaluator, symbol string, log *slog.Logger) *db.ScoreSet {
+	yahoo := toYahooSymbol(symbol)
+
 	finEv := finance.NewEvaluator(financeClient, log)
-	financialScore := finEv.Evaluate(ctx, symbol)
-	sentimentScore := sentimentEv.Evaluate(ctx, symbol)
-	leadershipScore := leadershipEv.Evaluate(ctx, symbol)
-	typeSentimentScore := typeSentEv.Evaluate(ctx, symbol)
+	financialScore := finEv.Evaluate(ctx, yahoo)
+	sentimentScore := sentimentEv.Evaluate(ctx, yahoo)
+	leadershipScore := leadershipEv.Evaluate(ctx, yahoo)
+	typeSentimentScore := typeSentEv.Evaluate(ctx, yahoo)
 
 	return &db.ScoreSet{
 		Symbol:        symbol,
@@ -31,4 +34,11 @@ func Analyze(ctx context.Context, financeClient *finance.Client, sentimentEv *se
 		Leadership:    leadershipScore,
 		TypeSentiment: typeSentimentScore,
 	}
+}
+
+func toYahooSymbol(symbol string) string {
+	if strings.HasSuffix(symbol, ".TO") {
+		return symbol
+	}
+	return symbol + ".TO"
 }
