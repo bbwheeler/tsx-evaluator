@@ -28,8 +28,6 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	mu         sync.Mutex
-	crumbed    bool
-	crumb      string
 	cache      map[string]cachedFinancials
 }
 
@@ -65,47 +63,8 @@ func NewClientWithBaseURL(baseURL string) *Client {
 				return nil
 			},
 		},
-		crumb: "test-crumb",
 		cache: make(map[string]cachedFinancials),
 	}
-}
-
-func (c *Client) ensureCookies(ctx context.Context) error {
-	if c.crumb != "" {
-		return nil
-	}
-	base := "https://finance.yahoo.com"
-	if c.baseURL != "" {
-		base = c.baseURL
-	}
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+"/", nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
-	if _, err := c.httpClient.Do(req); err != nil {
-		return fmt.Errorf("get yahoo cookies: %w", err)
-	}
-
-	crumbURL := "https://query2.finance.yahoo.com/v1/test/getcrumb"
-	if c.baseURL != "" {
-		crumbURL = c.baseURL + "/v1/test/getcrumb"
-	}
-	req, _ = http.NewRequestWithContext(ctx, http.MethodGet, crumbURL, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("get yahoo crumb: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read crumb: %w", err)
-	}
-	c.crumb = strings.TrimSpace(string(body))
-	if c.crumb == "" {
-		return fmt.Errorf("empty crumb from yahoo")
-	}
-	return nil
 }
 
 func (c *Client) fetchFinancials(ctx context.Context, symbol string) (
@@ -118,10 +77,6 @@ func (c *Client) fetchFinancials(ctx context.Context, symbol string) (
 	}
 	c.mu.Unlock()
 
-	if err := c.ensureCookies(ctx); err != nil {
-		return nil, nil, nil, err
-	}
-
 	now := time.Now()
 	period1 := now.AddDate(-4, 0, 0).Unix()
 	period2 := now.Unix()
@@ -130,8 +85,8 @@ func (c *Client) fetchFinancials(ctx context.Context, symbol string) (
 	if c.baseURL != "" {
 		url = fmt.Sprintf("%s/ws/fundamentals-timeseries/v1/finance/timeseries/%s", c.baseURL, symbol)
 	}
-	url += fmt.Sprintf("?type=%s&period1=%d&period2=%d&merge=false&padTimeSeries=true&lang=en-US&region=US&crumb=%s",
-		timeseriesTypeKeys, period1, period2, c.crumb)
+	url += fmt.Sprintf("?type=%s&period1=%d&period2=%d&merge=false&padTimeSeries=true&lang=en-US&region=US",
+		timeseriesTypeKeys, period1, period2)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")

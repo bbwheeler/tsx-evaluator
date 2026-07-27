@@ -6,94 +6,53 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
-	"strings"
 	"sync"
-	"time"
+
+	"github.com/example/tsx-evaluator/internal/yahoo"
 )
 
 type ProfileClient struct {
 	baseURL    string
 	httpClient *http.Client
+	auth       *yahoo.Auth
 	mu         sync.Mutex
-	crumb      string
 }
 
 func NewProfileClient() *ProfileClient {
-	jar, _ := cookiejar.New(nil)
-	return &ProfileClient{
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-			Jar:     jar,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return nil
-			},
-		},
-	}
+	return &ProfileClient{auth: yahoo.New()}
 }
 
 func NewProfileClientForTest(baseURL string) *ProfileClient {
 	return &ProfileClient{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-		crumb: "test-crumb",
+		baseURL:    baseURL,
+		httpClient: &http.Client{},
+		auth:       yahoo.NewForTest("test-crumb"),
 	}
-}
-
-func (c *ProfileClient) baseURLForRequest() string {
-	if c.baseURL != "" {
-		return c.baseURL
-	}
-	return "https://query2.finance.yahoo.com"
-}
-
-func (c *ProfileClient) ensureCrumb(ctx context.Context) error {
-	if c.crumb != "" {
-		return nil
-	}
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://finance.yahoo.com/", nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
-	if _, err := c.httpClient.Do(req); err != nil {
-		return fmt.Errorf("get yahoo cookies: %w", err)
-	}
-
-	req, _ = http.NewRequestWithContext(ctx, http.MethodGet, "https://query2.finance.yahoo.com/v1/test/getcrumb", nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("get yahoo crumb: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read crumb: %w", err)
-	}
-	c.crumb = strings.TrimSpace(string(body))
-	if c.crumb == "" {
-		return fmt.Errorf("empty crumb from yahoo")
-	}
-	return nil
 }
 
 func (c *ProfileClient) GetProfile(ctx context.Context, symbol string) (*CompanyProfile, error) {
-	c.mu.Lock()
-	err := c.ensureCrumb(ctx)
-	c.mu.Unlock()
+	crumb, err := c.auth.Crumb(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	base := "https://query2.finance.yahoo.com"
+	if c.baseURL != "" {
+		base = c.baseURL
+	}
+
 	url := fmt.Sprintf("%s/v10/finance/quoteSummary/%s?modules=assetProfile,defaultKeyStatistics,summaryDetail&crumb=%s",
-		c.baseURLForRequest(), symbol, c.crumb)
+		base, symbol, crumb)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 
-	resp, err := c.httpClient.Do(req)
+	httpClient := c.auth.HTTPClient()
+	if c.httpClient != nil {
+		httpClient = c.httpClient
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch yahoo profile: %w", err)
 	}
@@ -140,11 +99,11 @@ type yahooProfileResponse struct {
 	QuoteSummary struct {
 		Result []struct {
 			AssetProfile struct {
-				CompanyName      string `json:"companyName"`
-				Sector           string `json:"sector"`
-				Industry         string `json:"industry"`
-				Description      string `json:"description"`
-				FullTimeEmployees int   `json:"fullTimeEmployees"`
+				CompanyName       string `json:"companyName"`
+				Sector            string `json:"sector"`
+				Industry          string `json:"industry"`
+				Description       string `json:"description"`
+				FullTimeEmployees int    `json:"fullTimeEmployees"`
 			} `json:"assetProfile"`
 			SummaryDetail struct {
 				MarketCap    yahooValue `json:"marketCap"`
