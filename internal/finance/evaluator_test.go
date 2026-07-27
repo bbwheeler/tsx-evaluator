@@ -16,12 +16,21 @@ func tsVal(date string, val float64) tsEntry {
 }
 
 func makeTimeseriesResponse(entries map[string][]tsEntry) map[string]any {
-	result := map[string]any{
+	var results []any
+	for k, v := range entries {
+		results = append(results, map[string]any{
+			"meta": map[string]any{
+				"symbol": []string{"TEST.TO"},
+				"type":   []string{k},
+			},
+			k: v,
+		})
+	}
+	return map[string]any{
 		"timeseries": map[string]any{
-			"result": []any{entries},
+			"result": results,
 		},
 	}
-	return result
 }
 
 func TestClient_GetIncomeStatement(t *testing.T) {

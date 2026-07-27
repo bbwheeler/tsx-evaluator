@@ -16,14 +16,21 @@ import (
 )
 
 func timeseriesResponse(data map[string][]tsEntry) map[string]any {
-	result := map[string]any{
-		"timeseries": map[string]any{
-			"result": []any{
-				data,
+	var results []any
+	for k, v := range data {
+		results = append(results, map[string]any{
+			"meta": map[string]any{
+				"symbol": []string{"TEST.TO"},
+				"type":   []string{k},
 			},
+			k: v,
+		})
+	}
+	return map[string]any{
+		"timeseries": map[string]any{
+			"result": results,
 		},
 	}
-	return result
 }
 
 type tsEntry struct {

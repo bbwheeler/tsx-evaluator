@@ -177,22 +177,22 @@ func parseTimeseries(raw []byte, symbol string) ([]IncomeStatement, []BalanceShe
 		return nil, nil, nil, nil
 	}
 
-	result := resp.Timeseries.Result[0]
-
 	entries := make(map[string][]tsEntry)
-	for key, val := range result {
-		if key == "meta" || key == "timestamp" {
-			continue
+	for _, result := range resp.Timeseries.Result {
+		for key, val := range result {
+			if key == "meta" || key == "timestamp" {
+				continue
+			}
+			if !strings.HasPrefix(key, "annual") {
+				continue
+			}
+			var arr []tsEntry
+			if err := json.Unmarshal(val, &arr); err != nil {
+				continue
+			}
+			baseKey := strings.TrimPrefix(key, "annual")
+			entries[baseKey] = arr
 		}
-		if !strings.HasPrefix(key, "annual") {
-			continue
-		}
-		var arr []tsEntry
-		if err := json.Unmarshal(val, &arr); err != nil {
-			continue
-		}
-		baseKey := strings.TrimPrefix(key, "annual")
-		entries[baseKey] = arr
 	}
 
 	dates := collectDates(entries)
