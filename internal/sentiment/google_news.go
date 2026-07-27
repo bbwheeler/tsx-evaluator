@@ -114,3 +114,17 @@ func (c *GoogleNewsClient) FetchArticles(ctx context.Context, symbol string, lim
 
 	return articles, nil
 }
+
+func cleanHTML(s string) string {
+	s = strings.ReplaceAll(s, "<p>", "")
+	s = strings.ReplaceAll(s, "</p>", "")
+	s = strings.ReplaceAll(s, "<br>", "")
+	s = strings.ReplaceAll(s, "<br/>", "")
+	s = strings.ReplaceAll(s, "<br />", "")
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&quot;", "\"")
+	s = strings.ReplaceAll(s, "&#39;", "'")
+	return strings.TrimSpace(s)
+}
