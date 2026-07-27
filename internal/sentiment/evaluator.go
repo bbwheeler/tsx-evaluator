@@ -3,13 +3,11 @@ package sentiment
 import (
 	"context"
 	"log/slog"
-	"sync"
 )
 
 // Evaluator scores a company's sentiment using news and social media data.
 type Evaluator struct {
 	llmClient    *LLMClient
-	yahooClient  *YahooRSSClient
 	googleClient *GoogleNewsClient
 	log          *slog.Logger
 }
@@ -21,7 +19,6 @@ func NewEvaluator(
 ) *Evaluator {
 	return &Evaluator{
 		llmClient:    llmClient,
-		yahooClient:  NewYahooRSSClient(),
 		googleClient: NewGoogleNewsClient("en-US"),
 		log:          log,
 	}
@@ -62,42 +59,11 @@ func (e *Evaluator) Evaluate(ctx context.Context, symbol string) float64 {
 }
 
 func (e *Evaluator) fetchAllArticles(ctx context.Context, symbol string) []Article {
-	type sourceResult struct {
-		articles []Article
-		err      error
+	articles, err := e.googleClient.FetchArticles(ctx, symbol, 20)
+	if err != nil {
+		e.log.Warn("failed to fetch articles",
+			"error", err)
+		return nil
 	}
-
-	var wg sync.WaitGroup
-	results := make(chan sourceResult, 2)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		articles, err := e.yahooClient.FetchArticles(ctx, symbol, 10)
-		results <- sourceResult{articles, err}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		articles, err := e.googleClient.FetchArticles(ctx, symbol, 15)
-		results <- sourceResult{articles, err}
-	}()
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var allArticles []Article
-	for result := range results {
-		if result.err != nil {
-			e.log.Warn("failed to fetch articles",
-				"error", result.err)
-			continue
-		}
-		allArticles = append(allArticles, result.articles...)
-	}
-
-	return allArticles
+	return articles
 }
