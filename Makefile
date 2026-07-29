@@ -13,7 +13,7 @@ tidy:
 	go mod tidy
 
 build: proto
-	go build -o bin/tsx-evaluator ./cmd/server
+	go build -o bin/server ./cmd/server
 
 run: proto
 	go run ./cmd/server
