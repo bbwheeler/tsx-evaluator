@@ -26,6 +26,7 @@ const timeseriesTypeKeys = "annualTotalRevenue,annualGrossProfit,annualOperating
 
 type Client struct {
 	baseURL    string
+	region     string
 	httpClient *http.Client
 	mu         sync.Mutex
 	cache      map[string]cachedFinancials
@@ -39,8 +40,13 @@ type cachedFinancials struct {
 }
 
 func NewClient() *Client {
+	return NewClientWithRegion("US")
+}
+
+func NewClientWithRegion(region string) *Client {
 	jar, _ := cookiejar.New(nil)
 	return &Client{
+		region:     strings.ToUpper(region),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Jar:     jar,
@@ -50,6 +56,8 @@ func NewClient() *Client {
 		},
 		cache: make(map[string]cachedFinancials),
 	}
+}
+}
 }
 
 func NewClientWithBaseURL(baseURL string) *Client {
@@ -85,14 +93,17 @@ func (c *Client) fetchFinancials(ctx context.Context, symbol string) (
 	if c.baseURL != "" {
 		url = fmt.Sprintf("%s/ws/fundamentals-timeseries/v1/finance/timeseries/%s", c.baseURL, symbol)
 	}
-	url += fmt.Sprintf("?type=%s&period1=%d&period2=%d&merge=false&padTimeSeries=true&lang=en-US&region=US",
-		timeseriesTypeKeys, period1, period2)
+	url += fmt.Sprintf("?type=%s&period1=%d&period2=%d&merge=false&padTimeSeries=true&lang=en-US&region=%s",
+		timeseriesTypeKeys, period1, period2, c.region)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; tsx-evaluator/1.0)")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
+
+
+
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("fetch timeseries: %w", err)
 	}

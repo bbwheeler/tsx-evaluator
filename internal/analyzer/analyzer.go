@@ -37,7 +37,7 @@ func Analyze(ctx context.Context, financeClient *finance.Client, sentimentEv *se
 }
 
 func toYahooSymbol(symbol string) string {
-	if strings.HasSuffix(symbol, ".TO") {
+	if strings.Contains(symbol, ".") {
 		return symbol
 	}
 	return symbol + ".TO"
