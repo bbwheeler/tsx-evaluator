@@ -9,10 +9,34 @@ option go_package = "github.com/example/tsx-evaluator/gen/tsx/v1;tsxv1";
 // ScoreSet holds all evaluation scores for a single stock symbol.
 message ScoreSet {
   string symbol = 1;
+
+  // --- Core financial health score ---
+  // Composite of Piotroski F-Score (profitability/leverage/margin/efficiency) and
+  // supplementary health metrics (FCF conversion, debt quality, margin stability).
   double financials = 2;
+
+  // --- Revenue and earnings momentum ---
+  // Measures accelerating fundamentals: revenue acceleration, margin expansion,
+  // operating leverage, cash flow trend. High scores indicate a company improving fast.
+  double growth_momentum = 7;
+
+  // --- Sentiment score ---
+  // LLM-analyzed sentiment from news and social media for the specific stock.
   double sentiment = 3;
+
+  // --- Leadership quality ---
+  // Executive tenure, stability, and board composition score.
   double leadership = 4;
+
+  // --- Sector/Industry tailwinds ---
+  // Sentiment toward the company's sector/industry (macro opportunity).
   double type_sentiment = 5;
+
+  // --- Valuation fairness ---
+  // Compares price to fundamental value: P/E, EV/EBITDA, Price-to-FCF vs industry norm.
+  // Penalizes overvaluation that could crush long-term returns even in great companies.
+  double valuation_fairness = 8;
+
   google.protobuf.Timestamp evaluated_at = 6;
 }
 
@@ -31,22 +55,24 @@ message GetScoresResponse {
 enum ScoreMetric {
   SCORE_METRIC_UNSPECIFIED = 0;
   SCORE_METRIC_FINANCIALS = 1;
+  SCORE_METRIC_GROWTH_MOMENTUM = 9;
   SCORE_METRIC_SENTIMENT = 2;
   SCORE_METRIC_LEADERSHIP = 3;
   SCORE_METRIC_TYPE_SENTIMENT = 4;
+  SCORE_METRIC_VALUATION_FAIRNESS = 10;
 }
 
 // ScoreWeights provides per-metric weights for a composite score.
-// The composite is: w_f*financials + w_s*sentiment + w_l*leadership + w_t*type_sentiment
 message ScoreWeights {
   double financials = 1;
+  double growth_momentum = 7;
   double sentiment = 2;
   double leadership = 3;
   double type_sentiment = 4;
+  double valuation_fairness = 8;
 }
 
 message ListScoredStocksRequest {
-  // Sort by a single metric, OR by a weighted composite.
   oneof sort_by {
     ScoreMetric metric = 1;
     ScoreWeights weights = 2;
@@ -64,9 +90,22 @@ message ListScoredStocksResponse {
 
 // --- EvaluateNow -----------------------------------------------------
 
-message EvaluateNowRequest {}
+message EvaluateNowRequest {
+  // If empty, re-evaluates all symbols. If set, evaluates just that symbol.
+  string symbol = 1;
+}
 
 message EvaluateNowResponse {
+  ScoreSet scores = 1;
+}
+
+// --- EvaluateStock ---------------------------------------------------
+
+message EvaluateStockRequest {
+  string symbol = 1;
+}
+
+message EvaluateStockResponse {
   ScoreSet scores = 1;
 }
 
@@ -76,4 +115,5 @@ service EvaluatorService {
   rpc GetScores(GetScoresRequest) returns (GetScoresResponse);
   rpc ListScoredStocks(ListScoredStocksRequest) returns (ListScoredStocksResponse);
   rpc EvaluateNow(EvaluateNowRequest) returns (EvaluateNowResponse);
+  rpc EvaluateStock(EvaluateStockRequest) returns (EvaluateStockResponse);
 }

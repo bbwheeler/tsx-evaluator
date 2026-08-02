@@ -14,12 +14,14 @@ import (
 var ErrNotFound = errors.New("evaluation not found")
 
 type ScoreSet struct {
-	Symbol       string
-	Financials   float64
-	Sentiment    float64
-	Leadership   float64
-	TypeSentiment float64
-	EvaluatedAt  time.Time
+	Symbol            string
+	Financials        float64
+	Sentiment         float64
+	Leadership        float64
+	TypeSentiment     float64
+	GrowthMomentum    float64
+	ValuationFairness float64
+	EvaluatedAt       time.Time
 }
 
 type Repository struct {
@@ -51,15 +53,17 @@ func (r *Repository) Migrate(ctx context.Context, migrationSQL string) error {
 
 func (r *Repository) UpsertScores(ctx context.Context, s *ScoreSet) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO evaluations (symbol, financials, sentiment, leadership, type_sentiment, evaluated_at)
-		VALUES ($1, $2, $3, $4, $5, now())
+		INSERT INTO evaluations (symbol, financials, sentiment, leadership, type_sentiment, growth_momentum, valuation_fairness, evaluated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, now())
 		ON CONFLICT (symbol) DO UPDATE SET
 			financials = EXCLUDED.financials,
 			sentiment = EXCLUDED.sentiment,
 			leadership = EXCLUDED.leadership,
 			type_sentiment = EXCLUDED.type_sentiment,
+			growth_momentum = EXCLUDED.growth_momentum,
+			valuation_fairness = EXCLUDED.valuation_fairness,
 			evaluated_at = now()
-	`, s.Symbol, s.Financials, s.Sentiment, s.Leadership, s.TypeSentiment)
+	`, s.Symbol, s.Financials, s.Sentiment, s.Leadership, s.TypeSentiment, s.GrowthMomentum, s.ValuationFairness)
 	if err != nil {
 		return fmt.Errorf("upsert scores: %w", err)
 	}
@@ -68,7 +72,7 @@ func (r *Repository) UpsertScores(ctx context.Context, s *ScoreSet) error {
 
 func (r *Repository) GetBySymbol(ctx context.Context, symbol string) (*ScoreSet, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT symbol, financials, sentiment, leadership, type_sentiment, evaluated_at
+		`SELECT symbol, financials, sentiment, leadership, type_sentiment, growth_momentum, valuation_fairness, evaluated_at
 		 FROM evaluations WHERE upper(symbol) = upper($1)`, symbol)
 	return scanScore(row)
 }
@@ -83,7 +87,7 @@ func (r *Repository) ListOrdered(ctx context.Context, orderExpr string, descendi
 	}
 
 	query := fmt.Sprintf(
-		`SELECT symbol, financials, sentiment, leadership, type_sentiment, evaluated_at
+		`SELECT symbol, financials, sentiment, leadership, type_sentiment, growth_momentum, valuation_fairness, evaluated_at
 		 FROM evaluations
 		 WHERE upper(symbol) > upper($1)
 		 ORDER BY %s %s, symbol ASC
@@ -139,7 +143,7 @@ func scanScore(row rowScanner) (*ScoreSet, error) {
 	var s ScoreSet
 	err := row.Scan(
 		&s.Symbol, &s.Financials, &s.Sentiment, &s.Leadership,
-		&s.TypeSentiment, &s.EvaluatedAt,
+		&s.TypeSentiment, &s.GrowthMomentum, &s.ValuationFairness, &s.EvaluatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -151,18 +155,20 @@ func scanScore(row rowScanner) (*ScoreSet, error) {
 }
 
 // BuildCompositeExpr returns a SQL expression for a weighted combination of scores.
-func BuildCompositeExpr(w Financials, s Sentiment, l Leadership, t TypeSentiment) string {
+func BuildCompositeExpr(w Financials, s Sentiment, l Leadership, t TypeSentiment, g GrowthMomentum, v ValuationFairness) string {
 	return fmt.Sprintf(
-		"(%.6f*financials + %.6f*sentiment + %.6f*leadership + %.6f*type_sentiment)",
-		w, s, l, t,
+		"(%.6f*financials + %.6f*sentiment + %.6f*leadership + %.6f*type_sentiment + %.6f*growth_momentum + %.6f*valuation_fairness)",
+		w, s, l, t, g, v,
 	)
 }
 
 type (
-	Financials  = float64
-	Sentiment   = float64
-	Leadership  = float64
-	TypeSentiment = float64
+	Financials        = float64
+	Sentiment         = float64
+	Leadership        = float64
+	TypeSentiment     = float64
+	GrowthMomentum    = float64
+	ValuationFairness = float64
 )
 
 // ScoreMetricToColumn maps a metric enum name to its column.
@@ -170,14 +176,18 @@ type (
 // names (e.g. "SCORE_METRIC_SENTIMENT").
 func ScoreMetricToColumn(metric string) (string, bool) {
 	cols := map[string]string{
-		"FINANCIALS":              "financials",
-		"SENTIMENT":               "sentiment",
-		"LEADERSHIP":              "leadership",
-		"TYPE_SENTIMENT":          "type_sentiment",
-		"SCORE_METRIC_FINANCIALS": "financials",
-		"SCORE_METRIC_SENTIMENT":  "sentiment",
-		"SCORE_METRIC_LEADERSHIP": "leadership",
-		"SCORE_METRIC_TYPE_SENTIMENT": "type_sentiment",
+		"FINANCIALS":                 "financials",
+		"GROWTH_MOMENTUM":            "growth_momentum",
+		"SENTIMENT":                  "sentiment",
+		"LEADERSHIP":                 "leadership",
+		"TYPE_SENTIMENT":             "type_sentiment",
+		"VALUATION_FAIRNESS":         "valuation_fairness",
+		"SCORE_METRIC_FINANCIALS":    "financials",
+		"SCORE_METRIC_GROWTH_MOMENTUM": "growth_momentum",
+		"SCORE_METRIC_SENTIMENT":     "sentiment",
+		"SCORE_METRIC_LEADERSHIP":    "leadership",
+		"SCORE_METRIC_TYPE_SENTIMENT":  "type_sentiment",
+		"SCORE_METRIC_VALUATION_FAIRNESS": "valuation_fairness",
 	}
 	c, ok := cols[strings.ToUpper(metric)]
 	return c, ok
