@@ -1,7 +1,7 @@
 [Container]
-Image=localhost/tsx-evaluator:latest
+Image=localhost/stocker-evaluator:latest
 PublishPort=50052:50052
-EnvironmentFile=%h/.config/tsx-evaluator/.env.podman
+EnvironmentFile=%h/.config/stocker-evaluator/.env.podman
 Network=host
 PodmanArgs=--read-only
 PodmanArgs=--tmpfs=/tmp:rw,noexec,nosuid,size=64m

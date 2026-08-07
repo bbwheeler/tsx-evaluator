@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/example/tsx-evaluator/internal/yahoo"
+	"github.com/example/stocker-evaluator/internal/yahoo"
 )
 
 type ProfileClient struct {

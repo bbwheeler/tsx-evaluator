@@ -12,16 +12,16 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/example/tsx-evaluator/internal/config"
-	"github.com/example/tsx-evaluator/internal/db"
-	"github.com/example/tsx-evaluator/internal/evaluator"
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/grpcserver"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	"github.com/example/stocker-evaluator/internal/config"
+	"github.com/example/stocker-evaluator/internal/db"
+	"github.com/example/stocker-evaluator/internal/evaluator"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/grpcserver"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 
-	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
+	stockerv1 "github.com/example/stocker-evaluator/gen/tsx/v1"
 )
 
 func main() {
@@ -78,7 +78,7 @@ func run(log *slog.Logger) error {
 	}
 
 	grpcSrv := grpc.NewServer()
-	tsxv1.RegisterEvaluatorServiceServer(grpcSrv, grpcserver.New(repo, finCli, sentEv, leadEv, typeSentEv, log))
+	stockerv1.RegisterEvaluatorServiceServer(grpcSrv, grpcserver.New(repo, finCli, sentEv, leadEv, typeSentEv, log))
 	reflection.Register(grpcSrv)
 
 	go func() {

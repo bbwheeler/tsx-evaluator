@@ -9,12 +9,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
-	"github.com/example/tsx-evaluator/internal/db"
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	stockerv1 "github.com/example/stocker-evaluator/gen/tsx/v1"
+	"github.com/example/stocker-evaluator/internal/db"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 )
 
 // mockStore implements the Store interface for testing.
@@ -55,7 +55,7 @@ func testFinanceClient() *finance.Client {
 
 func TestGetScores_EmptySymbol(t *testing.T) {
 	srv := newTestServer(&mockStore{})
-	_, err := srv.GetScores(context.Background(), &tsxv1.GetScoresRequest{Symbol: ""})
+	_, err := srv.GetScores(context.Background(), &stockerv1.GetScoresRequest{Symbol: ""})
 	if err == nil {
 		t.Fatal("expected error for empty symbol")
 	}
@@ -70,7 +70,7 @@ func TestGetScores_NotFound(t *testing.T) {
 			return nil, db.ErrNotFound
 		},
 	})
-	_, err := srv.GetScores(context.Background(), &tsxv1.GetScoresRequest{Symbol: "MISSING"})
+	_, err := srv.GetScores(context.Background(), &stockerv1.GetScoresRequest{Symbol: "MISSING"})
 	if err == nil {
 		t.Fatal("expected error for missing symbol")
 	}
@@ -85,7 +85,7 @@ func TestGetScores_InternalError(t *testing.T) {
 			return nil, context.Canceled
 		},
 	})
-	_, err := srv.GetScores(context.Background(), &tsxv1.GetScoresRequest{Symbol: "ERR"})
+	_, err := srv.GetScores(context.Background(), &stockerv1.GetScoresRequest{Symbol: "ERR"})
 	if c := status.Code(err); c != codes.Internal {
 		t.Errorf("expected Internal, got %v", c)
 	}
@@ -105,7 +105,7 @@ func TestGetScores_Success(t *testing.T) {
 			}, nil
 		},
 	})
-	resp, err := srv.GetScores(context.Background(), &tsxv1.GetScoresRequest{Symbol: "SHOP.TO"})
+	resp, err := srv.GetScores(context.Background(), &stockerv1.GetScoresRequest{Symbol: "SHOP.TO"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestListScoredStocks_DefaultPageSize(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{})
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestListScoredStocks_CapsAtMaxPageSize(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{PageSize: 1000})
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{PageSize: 1000})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestListScoredStocks_ClapsToMin(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{PageSize: -5})
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{PageSize: -5})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -199,8 +199,8 @@ func TestListScoredStocks_SortByMetric(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{
-		SortBy:     &tsxv1.ListScoredStocksRequest_Metric{Metric: tsxv1.ScoreMetric_SCORE_METRIC_SENTIMENT},
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{
+		SortBy:     &stockerv1.ListScoredStocksRequest_Metric{Metric: stockerv1.ScoreMetric_SCORE_METRIC_SENTIMENT},
 		Descending: true,
 	})
 	if err != nil {
@@ -225,9 +225,9 @@ func TestListScoredStocks_SortByWeights(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{
-		SortBy: &tsxv1.ListScoredStocksRequest_Weights{
-			Weights: &tsxv1.ScoreWeights{
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{
+		SortBy: &stockerv1.ListScoredStocksRequest_Weights{
+			Weights: &stockerv1.ScoreWeights{
 				Financials:    0.3,
 				Sentiment:     0.2,
 				Leadership:    0.4,
@@ -255,7 +255,7 @@ func TestListScoredStocks_DefaultSortByDescending(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{})
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestListScoredStocks_PaginationToken(t *testing.T) {
 			return 100, nil
 		},
 	})
-	resp, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{PageSize: 10})
+	resp, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{PageSize: 10})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestListScoredStocks_NoNextPageWhenFewerResults(t *testing.T) {
 			return 1, nil
 		},
 	})
-	resp, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{PageSize: 50})
+	resp, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{PageSize: 50})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestListScoredStocks_InternalError(t *testing.T) {
 			return 0, nil
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{})
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{})
 	if c := status.Code(err); c != codes.Internal {
 		t.Errorf("expected Internal, got %v", c)
 	}
@@ -331,7 +331,7 @@ func TestListScoredStocks_CountAllError(t *testing.T) {
 			return 0, context.Canceled
 		},
 	})
-	_, err := srv.ListScoredStocks(context.Background(), &tsxv1.ListScoredStocksRequest{})
+	_, err := srv.ListScoredStocks(context.Background(), &stockerv1.ListScoredStocksRequest{})
 	if c := status.Code(err); c != codes.Internal {
 		t.Errorf("expected Internal, got %v", c)
 	}
@@ -345,7 +345,7 @@ func TestEvaluateNow_Success(t *testing.T) {
 			return nil
 		},
 	})
-	resp, err := srv.EvaluateNow(context.Background(), &tsxv1.EvaluateNowRequest{})
+	resp, err := srv.EvaluateNow(context.Background(), &stockerv1.EvaluateNowRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestEvaluateNow_UpsertError(t *testing.T) {
 			return context.Canceled
 		},
 	})
-	_, err := srv.EvaluateNow(context.Background(), &tsxv1.EvaluateNowRequest{})
+	_, err := srv.EvaluateNow(context.Background(), &stockerv1.EvaluateNowRequest{})
 	if c := status.Code(err); c != codes.Internal {
 		t.Errorf("expected Internal, got %v", c)
 	}

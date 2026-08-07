@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/example/tsx-evaluator/internal/yahoo"
+	"github.com/example/stocker-evaluator/internal/yahoo"
 )
 
 // YahooClient fetches executive data from Yahoo Finance's quoteSummary API.

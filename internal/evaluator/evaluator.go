@@ -10,15 +10,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/example/tsx-evaluator/internal/analyzer"
-	"github.com/example/tsx-evaluator/internal/config"
-	"github.com/example/tsx-evaluator/internal/db"
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	"github.com/example/stocker-evaluator/internal/analyzer"
+	"github.com/example/stocker-evaluator/internal/config"
+	"github.com/example/stocker-evaluator/internal/db"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 
-	tsxv1 "github.com/example/tsx-tracker/gen/tsx/v1"
+	stockerv1 "github.com/example/tsx-tracker/gen/tsx/v1"
 )
 
 type Store interface {
@@ -71,7 +71,7 @@ func (e *Evaluator) cycle(ctx context.Context) {
 	}
 	defer conn.Close()
 
-	client := tsxv1.NewCompanyServiceClient(conn)
+	client := stockerv1.NewCompanyServiceClient(conn)
 
 	symbols, err := e.fetchAllSymbols(ctx, client)
 	if err != nil {
@@ -132,12 +132,12 @@ func (e *Evaluator) cycle(ctx context.Context) {
 		"evaluated", evaluated)
 }
 
-func (e *Evaluator) fetchAllSymbols(ctx context.Context, client tsxv1.CompanyServiceClient) ([]string, error) {
+func (e *Evaluator) fetchAllSymbols(ctx context.Context, client stockerv1.CompanyServiceClient) ([]string, error) {
 	var symbols []string
 	var pageToken string
 
 	for {
-		resp, err := client.ListCompanies(ctx, &tsxv1.ListCompaniesRequest{
+		resp, err := client.ListCompanies(ctx, &stockerv1.ListCompaniesRequest{
 			PageSize:  500,
 			PageToken: pageToken,
 		})

@@ -1,4 +1,4 @@
-module github.com/example/tsx-evaluator
+module github.com/example/stocker-evaluator
 
 go 1.25.0
 

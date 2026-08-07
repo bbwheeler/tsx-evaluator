@@ -1,0 +1,4 @@
+[Build]
+File=%h/stocker-evaluator/Containerfile
+SetWorkingDirectory=%h
+Image=localhost/stocker-evaluator:latest

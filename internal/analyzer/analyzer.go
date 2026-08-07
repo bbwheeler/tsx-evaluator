@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/example/tsx-evaluator/internal/db"
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	"github.com/example/stocker-evaluator/internal/db"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 )
 
 // Analyze fetches real financial data for symbol and returns a ScoreSet.

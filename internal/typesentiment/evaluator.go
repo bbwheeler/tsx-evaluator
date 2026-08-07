@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/example/tsx-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/sentiment"
 )
 
 // Evaluator scores the sentiment of a company's sector/industry.

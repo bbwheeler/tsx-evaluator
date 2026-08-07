@@ -7,7 +7,7 @@ proto-protoc:
 	protoc \
 		--go_out=gen --go_opt=paths=source_relative \
 		--go-grpc_out=gen --go-grpc_opt=paths=source_relative,require_unimplemented_servers=false \
-		-I proto proto/tsx/v1/evaluator.proto
+		-I proto proto/stocker/v1/evaluator.proto
 
 tidy:
 	go mod tidy
@@ -37,8 +37,8 @@ quadlet-install:
 	./deploy/install.sh
 
 quadlet-build:
-	podman build --no-cache -f Containerfile -t localhost/tsx-evaluator:latest ..
+	podman build --no-cache -f Containerfile -t localhost/stocker-evaluator:latest ..
 
 quadlet-enable: quadlet-build
 	systemctl --user daemon-reload
-	systemctl --user start tsx-evaluator-build.service
+	systemctl --user start stocker-evaluator-build.service

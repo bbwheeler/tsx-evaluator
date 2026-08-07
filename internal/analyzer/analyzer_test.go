@@ -9,10 +9,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 )
 
 func timeseriesResponse(data map[string][]tsEntry) map[string]any {

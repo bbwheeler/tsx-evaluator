@@ -8,14 +8,14 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/example/tsx-evaluator/internal/analyzer"
-	"github.com/example/tsx-evaluator/internal/db"
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	"github.com/example/stocker-evaluator/internal/analyzer"
+	"github.com/example/stocker-evaluator/internal/db"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 
-	tsxv1 "github.com/example/tsx-evaluator/gen/tsx/v1"
+	stockerv1 "github.com/example/stocker-evaluator/gen/tsx/v1"
 )
 
 const defaultPageSize = 50
@@ -29,7 +29,7 @@ type Store interface {
 }
 
 type Server struct {
-	tsxv1.UnimplementedEvaluatorServiceServer
+	stockerv1.UnimplementedEvaluatorServiceServer
 	repo      Store
 	finCli    *finance.Client
 	sentEv    *sentiment.Evaluator
@@ -42,7 +42,7 @@ func New(repo Store, finCli *finance.Client, sentEv *sentiment.Evaluator, leadEv
 	return &Server{repo: repo, finCli: finCli, sentEv: sentEv, leadEv: leadEv, typeSentEv: typeSentEv, log: log}
 }
 
-func (s *Server) GetScores(ctx context.Context, req *tsxv1.GetScoresRequest) (*tsxv1.GetScoresResponse, error) {
+func (s *Server) GetScores(ctx context.Context, req *stockerv1.GetScoresRequest) (*stockerv1.GetScoresResponse, error) {
 	if req.GetSymbol() == "" {
 		return nil, status.Error(codes.InvalidArgument, "symbol is required")
 	}
@@ -56,10 +56,10 @@ func (s *Server) GetScores(ctx context.Context, req *tsxv1.GetScoresRequest) (*t
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
-	return &tsxv1.GetScoresResponse{Scores: toProto(score)}, nil
+	return &stockerv1.GetScoresResponse{Scores: toProto(score)}, nil
 }
 
-func (s *Server) ListScoredStocks(ctx context.Context, req *tsxv1.ListScoredStocksRequest) (*tsxv1.ListScoredStocksResponse, error) {
+func (s *Server) ListScoredStocks(ctx context.Context, req *stockerv1.ListScoredStocksRequest) (*stockerv1.ListScoredStocksResponse, error) {
 	pageSize := int(req.GetPageSize())
 	if pageSize <= 0 {
 		pageSize = defaultPageSize
@@ -72,13 +72,13 @@ func (s *Server) ListScoredStocks(ctx context.Context, req *tsxv1.ListScoredStoc
 
 	var orderExpr string
 	switch sort := req.GetSortBy().(type) {
-	case *tsxv1.ListScoredStocksRequest_Metric:
+	case *stockerv1.ListScoredStocksRequest_Metric:
 		col, ok := db.ScoreMetricToColumn(sort.Metric.String())
 		if !ok {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid metric: %v", sort.Metric)
 		}
 		orderExpr = col
-	case *tsxv1.ListScoredStocksRequest_Weights:
+	case *stockerv1.ListScoredStocksRequest_Weights:
 		w := sort.Weights
 		orderExpr = db.BuildCompositeExpr(
 			w.GetFinancials(), w.GetSentiment(),
@@ -101,8 +101,8 @@ func (s *Server) ListScoredStocks(ctx context.Context, req *tsxv1.ListScoredStoc
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 
-	resp := &tsxv1.ListScoredStocksResponse{
-		Scores:     make([]*tsxv1.ScoreSet, 0, len(scores)),
+	resp := &stockerv1.ListScoredStocksResponse{
+		Scores:     make([]*stockerv1.ScoreSet, 0, len(scores)),
 		TotalCount: int32(total),
 	}
 	for i := range scores {
@@ -114,17 +114,17 @@ func (s *Server) ListScoredStocks(ctx context.Context, req *tsxv1.ListScoredStoc
 	return resp, nil
 }
 
-func (s *Server) EvaluateNow(ctx context.Context, req *tsxv1.EvaluateNowRequest) (*tsxv1.EvaluateNowResponse, error) {
+func (s *Server) EvaluateNow(ctx context.Context, req *stockerv1.EvaluateNowRequest) (*stockerv1.EvaluateNowResponse, error) {
 	scores := analyzer.Analyze(ctx, s.finCli, s.sentEv, s.leadEv, s.typeSentEv, "DUMMY", s.log)
 	if err := s.repo.UpsertScores(ctx, scores); err != nil {
 		s.log.Error("EvaluateNow upsert failed", "error", err)
 		return nil, status.Error(codes.Internal, "internal error")
 	}
-	return &tsxv1.EvaluateNowResponse{Scores: toProto(scores)}, nil
+	return &stockerv1.EvaluateNowResponse{Scores: toProto(scores)}, nil
 }
 
-func toProto(s *db.ScoreSet) *tsxv1.ScoreSet {
-	return &tsxv1.ScoreSet{
+func toProto(s *db.ScoreSet) *stockerv1.ScoreSet {
+	return &stockerv1.ScoreSet{
 		Symbol:        s.Symbol,
 		Financials:   s.Financials,
 		Sentiment:    s.Sentiment,

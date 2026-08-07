@@ -12,14 +12,14 @@ import (
 
 	"net"
 
-	"github.com/example/tsx-evaluator/internal/config"
-	"github.com/example/tsx-evaluator/internal/db"
-	"github.com/example/tsx-evaluator/internal/finance"
-	"github.com/example/tsx-evaluator/internal/leadership"
-	"github.com/example/tsx-evaluator/internal/sentiment"
-	"github.com/example/tsx-evaluator/internal/typesentiment"
+	"github.com/example/stocker-evaluator/internal/config"
+	"github.com/example/stocker-evaluator/internal/db"
+	"github.com/example/stocker-evaluator/internal/finance"
+	"github.com/example/stocker-evaluator/internal/leadership"
+	"github.com/example/stocker-evaluator/internal/sentiment"
+	"github.com/example/stocker-evaluator/internal/typesentiment"
 
-	tsxv1 "github.com/example/tsx-tracker/gen/tsx/v1"
+	stockerv1 "github.com/example/tsx-tracker/gen/tsx/v1"
 )
 
 // mockEvaluatorStore implements the Store interface for testing.
@@ -38,11 +38,11 @@ func (m *mockEvaluatorStore) UpsertScores(ctx context.Context, s *db.ScoreSet) e
 
 // mockCompanyServer implements the CompanyServiceServer for testing tracker interactions.
 type mockCompanyServer struct {
-	tsxv1.UnimplementedCompanyServiceServer
-	listCompaniesFn func(ctx context.Context, req *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error)
+	stockerv1.UnimplementedCompanyServiceServer
+	listCompaniesFn func(ctx context.Context, req *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error)
 }
 
-func (m *mockCompanyServer) ListCompanies(ctx context.Context, req *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error) {
+func (m *mockCompanyServer) ListCompanies(ctx context.Context, req *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error) {
 	return m.listCompaniesFn(ctx, req)
 }
 
@@ -50,7 +50,7 @@ func startMockTracker(t *testing.T, server *mockCompanyServer) *grpc.ClientConn 
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
-	tsxv1.RegisterCompanyServiceServer(srv, server)
+	stockerv1.RegisterCompanyServiceServer(srv, server)
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -74,9 +74,9 @@ func startMockTracker(t *testing.T, server *mockCompanyServer) *grpc.ClientConn 
 
 func TestFetchAllSymbols_SinglePage(t *testing.T) {
 	tracker := startMockTracker(t, &mockCompanyServer{
-		listCompaniesFn: func(_ context.Context, _ *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error) {
-			return &tsxv1.ListCompaniesResponse{
-				Companies: []*tsxv1.Company{
+		listCompaniesFn: func(_ context.Context, _ *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error) {
+			return &stockerv1.ListCompaniesResponse{
+				Companies: []*stockerv1.Company{
 					{Symbol: "SHOP.TO"},
 					{Symbol: "RY.TO"},
 					{Symbol: "TD.TO"},
@@ -86,7 +86,7 @@ func TestFetchAllSymbols_SinglePage(t *testing.T) {
 	})
 
 	ev := newTestEvaluator(t)
-	client := tsxv1.NewCompanyServiceClient(tracker)
+	client := stockerv1.NewCompanyServiceClient(tracker)
 	symbols, err := ev.fetchAllSymbols(context.Background(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -105,23 +105,23 @@ func TestFetchAllSymbols_SinglePage(t *testing.T) {
 func TestFetchAllSymbols_Paginated(t *testing.T) {
 	callCount := 0
 	tracker := startMockTracker(t, &mockCompanyServer{
-		listCompaniesFn: func(_ context.Context, req *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error) {
+		listCompaniesFn: func(_ context.Context, req *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error) {
 			callCount++
 			if req.PageToken == "" {
-				return &tsxv1.ListCompaniesResponse{
-					Companies:     []*tsxv1.Company{{Symbol: "A.TO"}, {Symbol: "B.TO"}},
+				return &stockerv1.ListCompaniesResponse{
+					Companies:     []*stockerv1.Company{{Symbol: "A.TO"}, {Symbol: "B.TO"}},
 					NextPageToken: "page2",
 					TotalCount:    4,
 				}, nil
 			}
-			return &tsxv1.ListCompaniesResponse{
-				Companies: []*tsxv1.Company{{Symbol: "C.TO"}, {Symbol: "D.TO"}},
+			return &stockerv1.ListCompaniesResponse{
+				Companies: []*stockerv1.Company{{Symbol: "C.TO"}, {Symbol: "D.TO"}},
 			}, nil
 		},
 	})
 
 	ev := newTestEvaluator(t)
-	client := tsxv1.NewCompanyServiceClient(tracker)
+	client := stockerv1.NewCompanyServiceClient(tracker)
 	symbols, err := ev.fetchAllSymbols(context.Background(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -136,13 +136,13 @@ func TestFetchAllSymbols_Paginated(t *testing.T) {
 
 func TestFetchAllSymbols_Error(t *testing.T) {
 	tracker := startMockTracker(t, &mockCompanyServer{
-		listCompaniesFn: func(_ context.Context, _ *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error) {
+		listCompaniesFn: func(_ context.Context, _ *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error) {
 			return nil, errors.New("rpc error")
 		},
 	})
 
 	ev := newTestEvaluator(t)
-	client := tsxv1.NewCompanyServiceClient(tracker)
+	client := stockerv1.NewCompanyServiceClient(tracker)
 	_, err := ev.fetchAllSymbols(context.Background(), client)
 	if err == nil {
 		t.Fatal("expected error from fetchAllSymbols")
@@ -151,13 +151,13 @@ func TestFetchAllSymbols_Error(t *testing.T) {
 
 func TestFetchAllSymbols_EmptyResponse(t *testing.T) {
 	tracker := startMockTracker(t, &mockCompanyServer{
-		listCompaniesFn: func(_ context.Context, _ *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error) {
-			return &tsxv1.ListCompaniesResponse{}, nil
+		listCompaniesFn: func(_ context.Context, _ *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error) {
+			return &stockerv1.ListCompaniesResponse{}, nil
 		},
 	})
 
 	ev := newTestEvaluator(t)
-	client := tsxv1.NewCompanyServiceClient(tracker)
+	client := stockerv1.NewCompanyServiceClient(tracker)
 	symbols, err := ev.fetchAllSymbols(context.Background(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -169,9 +169,9 @@ func TestFetchAllSymbols_EmptyResponse(t *testing.T) {
 
 func TestFetchAllSymbols_ContextCancellation(t *testing.T) {
 	tracker := startMockTracker(t, &mockCompanyServer{
-		listCompaniesFn: func(_ context.Context, _ *tsxv1.ListCompaniesRequest) (*tsxv1.ListCompaniesResponse, error) {
-			return &tsxv1.ListCompaniesResponse{
-				Companies: []*tsxv1.Company{{Symbol: "A.TO"}},
+		listCompaniesFn: func(_ context.Context, _ *stockerv1.ListCompaniesRequest) (*stockerv1.ListCompaniesResponse, error) {
+			return &stockerv1.ListCompaniesResponse{
+				Companies: []*stockerv1.Company{{Symbol: "A.TO"}},
 			}, nil
 		},
 	})
@@ -180,7 +180,7 @@ func TestFetchAllSymbols_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	client := tsxv1.NewCompanyServiceClient(tracker)
+	client := stockerv1.NewCompanyServiceClient(tracker)
 	_, _ = ev.fetchAllSymbols(ctx, client)
 }
 
